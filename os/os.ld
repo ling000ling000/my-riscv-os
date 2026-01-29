@@ -16,7 +16,8 @@ SECTIONS
 	} >ram
 
 	.data : {
-		. = ALIGN(4096);
+/*		. = ALIGN(4096);*/
+        . = ALIGN(16);
 		*(.sdata .sdata.*)
 		*(.data .data.*)
 		PROVIDE(_data_end = .);

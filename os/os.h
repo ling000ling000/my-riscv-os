@@ -1,0 +1,11 @@
+#ifndef __OS_H__
+#define __OS_H__
+
+#include <stddef.h>
+#include <stdarg.h>
+
+extern int printf(const char *format, ...);
+extern void panic(const char *fmt, ...);
+extern void sbi_console_putchar(int ch);
+
+#endif // __OS_H__

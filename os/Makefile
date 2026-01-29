@@ -43,17 +43,22 @@ OBJCOPY = $(CROSS_COMPILE)objcopy
 OBJDUMP = $(CROSS_COMPILE)objdump
 
 # 编译阶段：不要 -nostdlib
-CFLAGS  = -ffreestanding -fno-builtin -O2 -g
+#CFLAGS  = -ffreestanding -fno-builtin -O2 -g
+CFLAGS  = -ffreestanding -fno-builtin -O2 -g -mcmodel=medany
+
 
 # 链接阶段：才用 -nostdlib，避免去找 -lc/-lgloss
-LDFLAGS = -nostdlib -T os.ld
+#LDFLAGS = -nostdlib -T os.ld
+LDFLAGS = -nostdlib -T os.ld -mcmodel=medany
+
 
 SRCS_ASM = \
 	entry.S
 
 SRCS_C = \
 	sbi.c \
-	main.c
+	main.c \
+	printf.c
 
 OBJS = $(SRCS_ASM:.S=.o)
 OBJS += $(SRCS_C:.c=.o)
