@@ -2,6 +2,6 @@
 
 void os_main()
 {
-    printf(0);
+    printf("copy only, no format: %d %x %s\n");
     panic(0);
 }
