@@ -22,23 +22,61 @@ void uart_puts(const char *s)
 static int _vsnprintf(char *out, size_t n, const char *s, va_list vl)
 {
     (void)vl;
-    size_t pos = 0;
-    for (; *s; s++)
+    size_t pos = 0; // 初始化计数器，用于记录理论上需要写入的字符总数
+    int format = 0; // 初始化状态标记：0 代表普通文本模式，1 代表正在解析格式符
+
+    for (; *s; s++) // 循环遍历格式化字符串 s，直到遇到结束符 \0
     {
-        if (out && pos < n)
+        if (!format) // 如果当前处于普通文本模式
         {
-            out[pos] = *s;
+            if (*s == '%')
+            {
+                format = 1;
+                continue;
+            }
+            if (out && pos < n) out[pos] = *s; // 如果缓冲区有效且当前位置未超过缓冲区大小，将字符写入缓冲区
+            pos++;
+            continue;
         }
-        pos ++;
+
+        // format == 1: 处理%后面的格式符
+        switch (*s)
+        {
+        case 's':
+            {
+                const char *s2 = va_arg(vl, const char *);
+                if (!s2) s2 = "(null)";
+                while (*s2)
+                {
+                    if (out && pos < n) out[pos] = *s2;
+                    pos ++;
+                    s2 ++;
+                }
+                break;
+            }
+        case 'c':
+            {
+                char ch = (char)va_arg(vl, int);
+                if (out && pos < n) out[pos] = ch;
+                pos ++;
+                break;
+            }
+        case '%':
+            {
+                if (out && pos < n) out[pos] = '%';
+                pos ++;
+                break;
+            }
+        default:
+        break;
+        }
+        format = 0;
     }
-    if (out && pos < n)
-    {
-        out[pos] = 0;
-    }
-    else if (out && n)
-    {
-        out[n - 1] = 0;
-    }
+
+    // 处理字符串的NULL结束符
+    if (out && pos < n) out[pos] = 0; // 如果缓冲区空间充足，在内容末尾添加结束符
+    else if (out && n) out[n - 1] = 0; // 如果缓冲区已满但长度不为0，在最后一位强制截断并添加结束符
+
     return (int)pos;
 }
 
@@ -53,18 +91,28 @@ static int _vsnprintf(char *out, size_t n, const char *s, va_list vl)
 static char out_buf[1000]; // printf的全局输出缓冲区,所有printf最终都会先写入这里
 static int _vprintf(const char *s, va_list vl)
 {
-    // 第一次调用：只计算长度
+    va_list vl2;
+    va_copy(vl2, vl);
+
+    // 第一次调用 _vsnprintf：
+    // 1. 缓冲区传 NULL，表示不实际写入字符
+    // 2. 长度传 (size_t)-1，利用无符号数溢出特性得到系统允许的最大整数 (SIZE_MAX)，防止长度受限
+    // 3. 这一步的唯一目的是计算格式化后所需的字符串长度 res
     int res = _vsnprintf(NULL, (size_t)-1, s, vl);
 
-    // 防止缓冲区溢出
-    if (res + 1 >= sizeof(out_buf))
+    // 检查计算出的长度 res 加上 1 个结束符是否超过了全局缓冲区 out_buf 的容量
+    if (res + 1 > (int)sizeof(out_buf))
     {
         uart_puts("error: output string size overflow\n");
         while (1) {}
     }
 
-    // 第二次调用：真正生成字符串
-    _vsnprintf(out_buf, res + 1, s, vl);
+    // 第二次调用 _vsnprintf：
+    // 1. 传入实际缓冲区 out_buf
+    // 2. 传入确定的长度 res + 1 (包含结束符)
+    // 3. 使用备份的变参列表 vl2，因为原 vl 在第一次调用中已经被消耗
+    _vsnprintf(out_buf, res + 1, s, vl2);
+    va_end(vl2); // 释放备份的变参列表 vl2，结束变参处理
 
     // 输出到串口
     uart_puts(out_buf);

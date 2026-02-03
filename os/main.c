@@ -2,6 +2,6 @@
 
 void os_main()
 {
-    printf("copy only, no format: %d %x %s\n");
+    printf("str=%s char=%c percent=%%\n", "OK", 'A');
     panic(0);
 }
