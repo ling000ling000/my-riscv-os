@@ -2,9 +2,8 @@
 
 void os_main()
 {
-    printf("d=%d u=%u\n", -123, 123u);
-    printf("ld=%ld lu=%lu\n", -123456789L, 123456789UL);
-    printf("mix: %s %c %x %p %d\n", "OK", 'A', 0x1234abcd, (void*)0x80200000, -7);
+    int x = -7;
+    void *p = (void*)0x80200000;
 
-    panic(0);
+    panic("bad x=%d ptr=%p hex=%x", x, p, 0xdeadbeef);
 }

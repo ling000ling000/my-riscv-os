@@ -268,7 +268,14 @@ int printf(const char* fmt, ...)
 
 void panic(const char *fmt, ...)
 {
-    (void)fmt;
-    uart_puts(msg_panic);
+    va_list vl;
+
+    uart_puts("panic: ");
+
+    va_start(vl, fmt);
+    _vprintf(fmt, vl);
+    va_end(vl);
+
+    uart_puts("\n");
     while (1) {}
 }
