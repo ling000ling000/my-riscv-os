@@ -2,6 +2,12 @@
 
 void os_main()
 {
-    printf("str=%s char=%c percent=%%\n", "OK", 'A');
+    int v = 0x1234abcd;
+    void *p = (void *)&v;
+
+    printf("hex=%x\n", v);
+    printf("ptr=%p\n", p);
+    printf("longhex=%lx\n", (unsigned long)0x1122334455667788UL);
+
     panic(0);
 }
