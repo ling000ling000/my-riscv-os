@@ -110,6 +110,85 @@ static int _vsnprintf(char *out, size_t n, const char *s, va_list vl)
                 longarg = 0;
                 break;
             }
+        case 'u': // 处理无符号十进制数
+            {
+                unsigned long num = longarg ? va_arg(vl, unsigned long) : (unsigned long)va_arg(vl, unsigned int);
+
+                // 预计算该数字在十进制显示下的位数
+                unsigned long tmp = num;
+                int digits = 1;
+                while (tmp >= 10)
+                {
+                    tmp /= 10;
+                    digits ++;
+                }
+
+                // 将数值转换为字符并填充到缓冲区
+                for (int i = digits - 1; i >= 0; i -- )
+                {
+                    char ch = '0' + (num % 10); // 取出当前数值的个位数字，并转换为 ASCII 字符
+
+                    // 边界检查：必须检查 具体写入位置 (pos + i) 是否越界
+                    if (out && pos + (size_t)i < n)
+                    {
+                        out[pos + (size_t)i] = ch;
+                    }
+                    num /= 10;
+                }
+
+                pos += (size_t)digits;
+
+                longarg = 0;
+                break;
+            }
+        case 'd': // 处理有符号十进制整数 (%d)
+            {
+                // 根据 longarg 标志，分别提取 long 或 int 类型，并统一转换为 long 类型方便后续处理
+                long snum = longarg ? va_arg(vl, long) : (long)va_arg(vl, int);
+
+                unsigned long num; // 用于存储该数的绝对值
+                if (snum < 0)
+                {
+                    // 先处理符号位
+                    if (out && pos < n) out[pos] = '-';
+                    pos ++;
+
+                    // 计算绝对值并转换为无符号数
+                    num = (unsigned long)(-snum);
+                }
+                else
+                {
+                    // 如果是正数，直接转换为无符号数
+                    num = (unsigned long)snum;
+                }
+
+                // 计算绝对值的位数
+                unsigned long tmp = num;
+                int digits = 1; // 默认至少 1 位
+                while (tmp >= 10)
+                {
+                    tmp /= 10;
+                    digits ++;
+                }
+
+                // 将数值转换为字符并填充到缓冲区
+                for (int i = digits - 1; i >= 0; i -- )
+                {
+                    char ch = '0' + (num % 10); // 取出当前数值的个位数字，并转换为 ASCII 字符
+
+                    // 边界检查：必须检查 具体写入位置 (pos + i) 是否越界
+                    if (out && pos + (size_t)i < n)
+                    {
+                        out[pos + (size_t)i] = ch;
+                    }
+                    num /= 10;
+                }
+
+                pos += (size_t)digits;
+
+                longarg = 0;
+                break;
+            }
         case '%':
             {
                 if (out && pos < n) out[pos] = '%';
