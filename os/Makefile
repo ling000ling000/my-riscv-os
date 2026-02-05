@@ -53,13 +53,15 @@ LDFLAGS = -nostdlib -T os.ld -mcmodel=medany
 
 
 SRCS_ASM = \
-	entry.S
+	entry.S \
+	kernel_trap.S
 
 SRCS_C = \
 	sbi.c \
 	main.c \
 	printf.c \
 	batch.c \
+	trap.c
 
 OBJS = $(SRCS_ASM:.S=.o)
 OBJS += $(SRCS_C:.c=.o)
