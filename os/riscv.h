@@ -63,7 +63,7 @@ static inline void w_stvec(reg_t x)
 static inline reg_t r_stvec()
 {
     reg_t x;
-    asm volatile ("csrr stvec" : "=r"(x));
+    asm volatile ("csrr %0, stvec" : "=r"(x));
     return x;
 }
 

@@ -4,5 +4,5 @@ void os_main()
 {
     printf("hello world!\n");
 
-    testsys();
+    app_init_context();
 }

@@ -31,8 +31,17 @@ pt_reg_t* trap_handler(pt_reg_t* cx)
     printf("sstatus:%x\n", cx->sstatus); // 输出发生异常时的状态 (S/U 模式，中断使能位等)
     printf("sp:%x\n", cx->sp);       // 输出发生异常时的栈指针
 
-    cx->sepc += 8;
-    __restore(cx);
+    if ((scause & 0xfff) == 8) {        // U-mode ecall
+        cx->sepc += 4;                  // 只跳过 ecall 一条指令
+        printf("ecall handled, return to 0x%lx\n", (unsigned long)cx->sepc);
+
+        // TODO: 在这里根据 a7 分发 syscall，并把返回值写回 cx->a0
+        return cx;
+    }
+
+    // 其他异常先直接停机，别硬跳 sepc
+    printf("unhandled trap, halt.\n");
+    while (1) {}
 
     return cx;
 }
