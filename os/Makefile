@@ -58,7 +58,8 @@ SRCS_ASM = \
 SRCS_C = \
 	sbi.c \
 	main.c \
-	printf.c
+	printf.c \
+	batch.c \
 
 OBJS = $(SRCS_ASM:.S=.o)
 OBJS += $(SRCS_C:.c=.o)

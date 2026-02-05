@@ -4,6 +4,9 @@
 #include <stddef.h>
 #include <stdarg.h>
 
+#include "types.h"
+#include "riscv.h"
+
 extern int printf(const char *format, ...);
 extern void panic(const char *fmt, ...);
 extern void sbi_console_putchar(int ch);
