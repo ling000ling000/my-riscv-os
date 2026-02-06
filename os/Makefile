@@ -61,7 +61,8 @@ SRCS_C = \
 	main.c \
 	printf.c \
 	batch.c \
-	trap.c
+	trap.c \
+	syscall.c
 
 OBJS = $(SRCS_ASM:.S=.o)
 OBJS += $(SRCS_C:.c=.o)

@@ -12,6 +12,11 @@ size_t syscall(size_t id, reg_t arg1, reg_t arg2, reg_t arg3)
 {
     long ret;
     asm volatile(
+        /*
+        * a7 放 syscall number
+        * a0=a fd, a1=buf, a2=len
+        * 返回值放 a0
+         */
         "mv a7, %1\n\t"
         "mv a0, %2\n\t"
         "mv a1, %3\n\t"
@@ -28,8 +33,7 @@ size_t syscall(size_t id, reg_t arg1, reg_t arg2, reg_t arg3)
 void testsys()
 {
     syscall(2, 3, 4, 5);
-    syscall(1, 1, 1, 1);
-    syscall(1, 2, 3, 4);
+
     while (1) {}
 }
 
@@ -59,7 +63,7 @@ void app_init_context()
     // 关键步骤：设置 sstatus 的 SPP (Supervisor Previous Privilege) 位
     // 第 8 位是 SPP，将其置为 0 表示“之前的特权级是 User 模式”
     // 这样在执行 sret 指令时，CPU 就会切换回 User 模式
-    sstatus &= ~(1U << 8);
+    sstatus &= (0U << 8);
     w_sstatus(sstatus); // 写回sstatus
     printf("sstatus:%x\n", sstatus);
 

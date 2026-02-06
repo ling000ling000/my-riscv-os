@@ -20,4 +20,8 @@ extern void app_init_context();
 // trap.c
 extern void trap_init();
 
+// syscall
+void __SYSCALL(size_t syscall_id, reg_t arg1, reg_t arg2, reg_t arg3);
+#define sys_write 64
+
 #endif // __OS_H__
