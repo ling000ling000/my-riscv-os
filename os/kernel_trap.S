@@ -65,6 +65,8 @@ __alltraps:
     mv a0, sp         # 将当前 sp (即 TrapContext 结构体的起始地址) 赋值给 a0
                       # a0 是 RISC-V 调用约定的第一个参数寄存器
     call trap_handler # 跳转执行 C 语言编写的 trap_handler 函数
+    mv sp, a0
+    j __restore
 
 .global __restore
 .align 4
@@ -72,7 +74,7 @@ __restore:
     # case1: start running app by __restore (启动新任务)
     # case2: back to U after handling trap (处理完中断返回)
     # 此时 a0 寄存器持有 TrapContext 的指针（可能由 trap_handler 返回）
-    mv sp, a0  # 将 sp 指向 TrapContext 的位置
+    # mv sp, a0  # 将 sp 指向 TrapContext 的位置
 
     # 注意：此时 sscratch 的状态并不确定，需要通过恢复过程重置
 

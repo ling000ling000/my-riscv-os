@@ -11,7 +11,7 @@
  * sepc (Supervisor Exception Program Counter):
  * 记录发生异常或中断时的指令地址（或下一条指令地址），用于处理完异常后返回原程序。
  */
-static inline reg_t r_spec()
+static inline reg_t r_sepc()
 {
     reg_t x;
     asm volatile ("csrr %0, sepc" : "=r"(x));
@@ -22,7 +22,7 @@ static inline reg_t r_spec()
  * scause (Supervisor Cause Register):
  * 记录导致异常或中断的具体原因（通过最高位的 Interrupt 标志和低位的 Exception Code 区分）。
  */
-static inline reg_t r_scauese()
+static inline reg_t r_scause()
 {
     reg_t x;
     asm volatile ("csrr %0, scause" : "=r"(x));
@@ -37,6 +37,22 @@ static inline reg_t r_sstatus()
 {
     reg_t x;
     asm volatile ("csrr %0, sstatus" : "=r"(x));
+    return x;
+}
+
+// stval 记录了trap发生时的地址
+static inline reg_t r_stval()
+{
+    reg_t x;
+    asm volatile("csrr %0, stval" : "=r" (x) );
+    return x;
+}
+
+/* 读取 stvec 寄存器的值 */
+static inline reg_t r_stvec()
+{
+    reg_t x;
+    asm volatile ("csrr %0, stvec" : "=r"(x));
     return x;
 }
 
@@ -59,13 +75,7 @@ static inline void w_stvec(reg_t x)
     asm volatile ("csrw stvec, %0" : : "r"(x));
 }
 
-/* 读取 stvec 寄存器的值 */
-static inline reg_t r_stvec()
-{
-    reg_t x;
-    asm volatile ("csrr %0, stvec" : "=r"(x));
-    return x;
-}
+
 
 
 #endif //MY_RISCV_OS_RISCV_H

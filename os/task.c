@@ -63,35 +63,40 @@ void task_create(void (*task_entry)(void))
     {
         /* 计算 TrapContext 在内核栈顶的存储位置
            此处指针运算意为：内核栈基址 + 栈大小 - TrapContext 结构体大小 */
-        pt_reg_t* cx_ptr = &KernelStack[_top] + KERNEL_STACK_SIZE - sizeof(TaskContext);
+        /* 1) 计算该任务内核栈顶，并在栈顶预留 pt_reg_t 作为 Trap 上下文 */
+        uint8_t *kbase = (uint8_t *)&KernelStack[_top][0];
+        uint8_t *ktop  = kbase + KERNEL_STACK_SIZE;
+        pt_reg_t *cx_ptr = (pt_reg_t *)(ktop - sizeof(pt_reg_t));
 
         // 计算用户栈顶地址（栈向下增长，故为基址 + 大小）
-        reg_t user_sp = &UserStack[_top] + USER_STACK_SIZE;
+        uint8_t *ubase = (uint8_t *)&UserStack[_top][0];
+        reg_t user_sp  = (reg_t)(ubase + USER_STACK_SIZE);
 
         // 读取当前 sstatus (Supervisor Status) 寄存器的值
         reg_t sstatus = r_sstatus();
 
         // 修改 sstatus 的 SPP 位（第 8 位）
         // 将其置为 0，表示中断返回（sret）后特权级切换至 User 模式
-        sstatus &= (0U << 8);
+        // sstatus &= ~(1UL << 8);
+        // sstatus |= (1UL << 8);
+        sstatus &= ~(1UL << 8); // SPP=0, sret 回到 U
+
 
         // 将修改后的状态写回 sstatus 寄存器（这一步在逻辑上主要用于下方赋值）
-        w_sstatus(sstatus);
+        // w_sstatus(sstatus);
 
         /* 初始化内核栈顶的 TrapContext */
-        // 设置 sepc (Exception PC)，sret 后 CPU 将跳转至 task_entry 执行
-        cx_ptr->sepc = (reg_t)task_entry;
+        cx_ptr->sepc = (reg_t)task_entry; // 设置 sepc (Exception PC)，sret 后 CPU 将跳转至 task_entry 执行
+        cx_ptr->sstatus = sstatus; // 保存构造好的 sstatus，确保特权级正确切换
+        // cx_ptr->ss = (reg_t)user_sp; // 设置用户栈指针，进入用户态后 sp 寄存器将使用此值
+        cx_ptr->sscratch = (reg_t)user_sp;   // 这里保存用户栈指针
 
-        // 保存构造好的 sstatus，确保特权级正确切换
-        cx_ptr->sstatus = sstatus;
 
-        // 设置用户栈指针，进入用户态后 sp 寄存器将使用此值
-        cx_ptr->sp = (reg_t)user_sp;
+        printf("[task_create] id=%d sepc=%lx user_sp=%lx kcx=%lx\n", _top, cx_ptr->sepc, cx_ptr->sscratch, (reg_t)cx_ptr);
 
         /* 初始化任务控制块中的任务上下文 (TaskContext)
           调用 tcx_init，传入 TrapContext 的地址作为内核栈指针 */
         tasks[_top].task_context = tcx_init((reg_t)cx_ptr);
-
         // 将任务状态标记为 Ready（就绪），等待调度器选中
         tasks[_top].task_state = Ready;
 
@@ -148,6 +153,9 @@ void run_first_task()
 
     // 执行切换：加载 next_task_cx_ptr 中的内容并跳转
     // 这将加载 ra=__restore，最终通过 sret 进入任务 0 的用户代码
+    printf("[os] switching to first task: cx=%lx ra=%lx\n",
+       (reg_t)&tasks[0].task_context, (reg_t)tasks[0].task_context.ra);
+    printf("[os] first task ksp(trapframe)=%lx\n", (reg_t)tasks[0].task_context.sp);
     __switch(&_unused, next_task_cx_ptr);
 
     // 如果 __switch 返回，说明系统逻辑出现严重错误

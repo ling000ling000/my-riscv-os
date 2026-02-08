@@ -18,7 +18,7 @@ pt_reg_t* trap_handler(pt_reg_t* cx)
 {
     // 读取 scause (Supervisor Cause) 寄存器
     // 该寄存器包含了一个数字，指示了当前陷入内核的具体原因 (是时钟中断、非法指令还是系统调用等)
-    reg_t scause = r_scauese();
+    reg_t scause = r_scause();
 
     // 根据 scause 的值进行分支处理
     switch (scause)
@@ -26,12 +26,14 @@ pt_reg_t* trap_handler(pt_reg_t* cx)
         // 如果 scause 为 8，在 RISC-V 中通常表示“来自 U-mode 的 Environment Call”（即系统调用）
     case 8:
         {
+            cx->sepc += 4;
             __SYSCALL(cx->a7, cx->a0, cx->a1, cx->a2);
             break;
         }
     default:
         {
-            panic("unkonwn scause\n");
+            printf("scause=%lx sepc=%lx stval=%lx sstatus=%lx\n", r_scause(), r_sepc(), r_stval(), r_sstatus());
+            panic("unkonwn scause: %d\n", scause);
             break;
         }
     }
@@ -39,10 +41,10 @@ pt_reg_t* trap_handler(pt_reg_t* cx)
     // 更新 sepc (Supervisor Exception Program Counter) 寄存器
     // 此处将程序计数器加 8，目的是跳过触发 Trap 的那条指令（如 ecall），防止死循环
     // 注意：标准 ecall 指令通常长 4 字节，此处加 8 属于该特定 OS 实现的逻辑
-    cx->sepc += 8;
+    // cx->sepc += 8;
 
     // 执行上下文恢复操作（将寄存器值恢复到 CPU）
-    __restore(cx);
+    // __restore(cx);
 
     return cx;
 }

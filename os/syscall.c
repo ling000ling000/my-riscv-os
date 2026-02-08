@@ -16,7 +16,9 @@ void __sys_write(size_t fd, const char* data, size_t len)
     {
         // 如果是标准输出，直接调用 printf 将数据打印到屏幕/串口
         // 注意：此处直接打印 data，未利用 len 参数，这在教学代码中常见但并不严谨
-        printf(data);
+        // printf(data);
+        printf("%s", data);
+
     }
     else
     {
@@ -24,6 +26,16 @@ void __sys_write(size_t fd, const char* data, size_t len)
         panic("Unsupported fd in sys_write!");
     }
 }
+
+void __sys_exit(int code)
+{
+    printf("[kernel] task exit code=%d\n", code);
+    // 你可以把当前任务标记为 Exited，然后 schedule()
+    // TODO:task_exit_current(); // 你自己实现，或者直接改 tasks[_current].task_state = Exited;
+    schedule();
+    panic("unreachable in __sys_exit");
+}
+
 
 void __SYSCALL(size_t syscall_id, reg_t arg1, reg_t arg2, reg_t arg3)
 {
