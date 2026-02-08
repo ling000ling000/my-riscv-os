@@ -44,7 +44,7 @@ OBJDUMP = $(CROSS_COMPILE)objdump
 
 # 编译阶段：不要 -nostdlib
 #CFLAGS  = -ffreestanding -fno-builtin -O2 -g
-CFLAGS  = -ffreestanding -fno-builtin -O2 -g -mcmodel=medany
+CFLAGS  = -ffreestanding -fno-builtin -O2 -g -mcmodel=medany -Wno-int-conversion
 
 
 # 链接阶段：才用 -nostdlib，避免去找 -lc/-lgloss
@@ -54,15 +54,18 @@ LDFLAGS = -nostdlib -T os.ld -mcmodel=medany
 
 SRCS_ASM = \
 	entry.S \
-	kernel_trap.S
+	kernel_trap.S \
+	switch.S \
 
 SRCS_C = \
 	sbi.c \
 	main.c \
 	printf.c \
-	batch.c \
 	trap.c \
-	syscall.c
+	syscall.c \
+	string.c \
+	task.c \
+	app.c \
 
 OBJS = $(SRCS_ASM:.S=.o)
 OBJS += $(SRCS_C:.c=.o)
@@ -80,3 +83,8 @@ os.elf: $(OBJS)
 .PHONY : clean
 clean:
 	rm -rf *.o *.bin *.elf
+
+.PHONY : clean install
+
+install:
+	@echo "install: nothing to do"

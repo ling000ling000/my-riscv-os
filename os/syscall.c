@@ -3,23 +3,9 @@
 //
 #include "os.h"
 
-void __SYSCALL(size_t syscall_id, reg_t arg1, reg_t arg2, reg_t arg3)
-{
-    // 根据传入的系统调用号进行分支选择
-    switch (syscall_id)
-    {
-        case sys_write:
-            {
-                // TODO:__sys_write();
-                break;
-            }
-        default:
-            {
-                panic("unsupport syscall id");
-                break;
-            }
-    }
-}
+void __sys_yield(void);
+void __sys_exit(int code);   // 如果你也会调用它
+
 
 // 定义写操作的具体实现函数
 // 参数分别映射为：文件描述符 (fd)、数据缓冲区指针 (data)、数据长度 (len)
@@ -37,4 +23,32 @@ void __sys_write(size_t fd, const char* data, size_t len)
         // 报告错误并终止运行：当前实现仅支持写入标准输出，不支持其他文件描述符
         panic("Unsupported fd in sys_write!");
     }
+}
+
+void __SYSCALL(size_t syscall_id, reg_t arg1, reg_t arg2, reg_t arg3)
+{
+    // 根据传入的系统调用号进行分支选择
+    switch (syscall_id)
+    {
+    case __NR_write:
+        {
+            __sys_write(arg1, arg2, arg3);
+            break;
+        }
+    case __NR_shced_yield:
+        {
+            __sys_yield();
+            break;
+        }
+    default:
+        {
+            panic("unsupport syscall id:%d\n", syscall_id);
+            break;
+        }
+    }
+}
+
+void __sys_yield()
+{
+    schedule();
 }

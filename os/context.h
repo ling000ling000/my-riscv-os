@@ -7,6 +7,7 @@
 
 #include "os.h"
 
+// S Mode的 trap 上下文
 typedef struct pt_reg
 {
     reg_t x0;  // x0: 恒为 0 寄存器。虽然硬件上恒为0，但为了栈布局对齐或统一宏处理，通常也会预留位置
@@ -46,5 +47,25 @@ typedef struct pt_reg
     reg_t sstatus;
     reg_t sepc;
 } pt_reg_t;
+
+
+// s mode的任务上下文
+typedef struct TaskContext
+{
+    reg_t ra;
+    reg_t sp;
+    reg_t s0;
+    reg_t s1;
+    reg_t s2;
+    reg_t s3;
+    reg_t s4;
+    reg_t s5;
+    reg_t s6;
+    reg_t s7;
+    reg_t s8;
+    reg_t s9;
+    reg_t s10;
+    reg_t s11;
+} TaskContext;
 
 #endif //MY_RISCV_OS_CONTEXT_H

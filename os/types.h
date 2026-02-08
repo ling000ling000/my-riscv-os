@@ -14,4 +14,10 @@ typedef unsigned long long uint64_t;
 // RISCV64的寄存器大小是64位
 typedef uint64_t reg_t;
 
+#define EOF -1
+#ifndef NULL
+#define NULL ((void*)0)
+#endif
+#define EOS '\0'
+
 #endif //MY_RISCV_OS_TYPES_H

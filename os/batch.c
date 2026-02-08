@@ -32,8 +32,9 @@ size_t syscall(size_t id, reg_t arg1, reg_t arg2, reg_t arg3)
 
 void testsys()
 {
-    syscall(2, 3, 4, 5);
-
+    const char *message = "Hello, RISC-V!\n";
+    int len = strlen(message);
+    int ret = sys_write(0x41, (reg_t)1, (reg_t)message, (reg_t)len);
     while (1) {}
 }
 
