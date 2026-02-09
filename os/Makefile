@@ -66,6 +66,7 @@ SRCS_C = \
 	string.c \
 	task.c \
 	app.c \
+	timer.c \
 
 OBJS = $(SRCS_ASM:.S=.o)
 OBJS += $(SRCS_C:.c=.o)

@@ -36,8 +36,13 @@ void __sys_exit(int code)
     panic("unreachable in __sys_exit");
 }
 
+uint64_t __sys_get_time()
+{
+    return get_time_us();
+}
 
-void __SYSCALL(size_t syscall_id, reg_t arg1, reg_t arg2, reg_t arg3)
+
+uint64_t __SYSCALL(size_t syscall_id, reg_t arg1, reg_t arg2, reg_t arg3)
 {
     // 根据传入的系统调用号进行分支选择
     switch (syscall_id)
@@ -51,6 +56,12 @@ void __SYSCALL(size_t syscall_id, reg_t arg1, reg_t arg2, reg_t arg3)
         {
             __sys_yield();
             break;
+        }
+    case __NR_gettimeofday:
+        {
+            uint64_t time = __sys_get_time();
+            printf("[__SYSCALL]time: %lu\n", time);
+            return __sys_get_time();
         }
     default:
         {

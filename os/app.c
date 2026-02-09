@@ -41,6 +41,11 @@ void task_delay(volatile int count)
     while (count--);
 }
 
+uint64_t sys_get_time()
+{
+    return syscall(__NR_gettimeofday, 0, 0, 0);
+}
+
 void task1()
 {
     const char *message = "task1 is running!\n";
@@ -61,21 +66,23 @@ void task2()
     while (1)
     {
         sys_write(1, message, len);
-        task_delay(10000);
-        sys_yield();
+        // task_delay(10000);
+        // sys_yield();
     }
 }
 
 void task3()
 {
     const char *message = "task3 is running!\n";
-
     int len = strlen(message);
-    while (1)
-    {
-        sys_write(1,message, len);
-        task_delay(10000);
-        sys_yield();
+    while (1) {
+        uint64_t start = sys_get_time();
+        uint64_t end = start + 50000;   // 50ms 或 50,000us 取决于你的时间单位
+
+        while (sys_get_time() < end) {
+            sys_write(1, message, len);
+            sys_yield();
+        }
     }
 }
 

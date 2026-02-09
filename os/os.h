@@ -26,9 +26,10 @@ extern void app_init_context();
 extern void trap_init();
 
 // syscall
-void __SYSCALL(size_t syscall_id, reg_t arg1, reg_t arg2, reg_t arg3);
+uint64_t __SYSCALL(size_t syscall_id, reg_t arg1, reg_t arg2, reg_t arg3);
 #define __NR_write 64
 #define __NR_shced_yield 124
+#define __NR_gettimeofday 169
 
 // switch.S
 extern void __switch(TaskContext *current_task_cx_ptr, TaskContext* next_task_cx_ptr);
@@ -41,6 +42,11 @@ extern void run_first_task();
 // app.c
 extern void task_init();
 
+// timer.c
+extern void sbi_set_timer(uint64_t stime_value);
+extern void set_next_trigger();
+extern uint64_t get_time_us();
+extern void timer_init();
 
 // string
 extern size_t strlen(const char *s);

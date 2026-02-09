@@ -76,6 +76,57 @@ static inline void w_stvec(reg_t x)
 }
 
 
+/* * 读取当前的时间值 (mtime)
+ * 通常用于计算时间片或统计运行时间
+ */
+static inline reg_t r_mtime()
+{
+    reg_t x;
+    asm volatile ("rdtime %0" : "=r"(x)); // rdtime: RISC-V 伪指令，用于读取 time CSR
+    return x;
+}
+
+// 监管者模式中断使能位定义 (Supervisor Interrupt Enable Bits)
+
+// 定义 SEIE (Supervisor External Interrupt Enable) 掩码
+// 对应 sie 寄存器的第 9 位，控制 S 模式下的外部中断（如外设中断）
+#define SIE_SEIE (1L << 9) // external
+
+// 定义 STIE (Supervisor Timer Interrupt Enable) 掩码
+// 对应 sie 寄存器的第 5 位，控制 S 模式下的时钟中断
+#define SIE_STIE (1L << 5) // timer
+
+// 定义 SSIE (Supervisor Software Interrupt Enable) 掩码
+// 对应 sie 寄存器的第 1 位，控制 S 模式下的软件中断（常用于核间通信 IPI）
+#define SIE_SSIE (1L << 1) // software
+
+/* * 读取 sie 寄存器的当前值
+ * static inline: 建议编译器内联展开，减少函数调用开销
+ */
+static inline reg_t r_sie()
+{
+    reg_t x;
+    // 内联汇编指令
+    // csrr (Control Status Register Read): 读取控制状态寄存器
+    // %0: 对应输出操作数 x
+    // sie: 要读取的目标寄存器名称
+    // "=r" (x): 输出约束，"=" 表示只写，"r" 表示分配一个通用寄存器来存放结果 x
+    asm volatile("csrr %0, sie" : "=r" (x) );
+    return x;
+}
+
+/* * 向 sie 寄存器写入新值
+ * x: 要写入的位掩码配置
+ */
+static inline void w_sie(reg_t x)
+{
+    // 内联汇编指令
+    // csrw (Control Status Register Write): 写入控制状态寄存器
+    // sie: 目标寄存器
+    // %0: 对应输入操作数 x
+    // "r" (x): 输入约束，表示将变量 x 的值放入一个通用寄存器中供指令使用
+    asm volatile("csrw sie, %0" : : "r" (x));
+}
 
 
 #endif //MY_RISCV_OS_RISCV_H
