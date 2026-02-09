@@ -88,11 +88,11 @@ void task_create(void (*task_entry)(void))
         /* 初始化内核栈顶的 TrapContext */
         cx_ptr->sepc = (reg_t)task_entry; // 设置 sepc (Exception PC)，sret 后 CPU 将跳转至 task_entry 执行
         cx_ptr->sstatus = sstatus; // 保存构造好的 sstatus，确保特权级正确切换
-        // cx_ptr->ss = (reg_t)user_sp; // 设置用户栈指针，进入用户态后 sp 寄存器将使用此值
-        cx_ptr->sscratch = (reg_t)user_sp;   // 这里保存用户栈指针
+        cx_ptr->sp = (reg_t)user_sp; // 设置用户栈指针，进入用户态后 sp 寄存器将使用此值
+        // cx_ptr->sscratch = (reg_t)user_sp;   // 这里保存用户栈指针
 
 
-        printf("[task_create] id=%d sepc=%lx user_sp=%lx kcx=%lx\n", _top, cx_ptr->sepc, cx_ptr->sscratch, (reg_t)cx_ptr);
+        printf("[task_create] id=%d sepc=%lx user_sp=%lx kcx=%lx\n", _top, cx_ptr->sepc, cx_ptr->sp, (reg_t)cx_ptr);
 
         /* 初始化任务控制块中的任务上下文 (TaskContext)
           调用 tcx_init，传入 TrapContext 的地址作为内核栈指针 */
