@@ -1,7 +1,7 @@
 //
 // Created by kk on 2026/2/9.
 //
-#include "os.h"
+#include "../include/os.h"
 
 // 定义 QEMU virt 机器的硬件时钟频率
 // 10MHz (10,000,000 Hz)，意味着 mtime 寄存器每秒增加 10,000,000 次

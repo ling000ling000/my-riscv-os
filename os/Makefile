@@ -68,6 +68,10 @@ SRCS_C = \
 	app.c \
 	timer.c \
 
+INCLUDE:=./include
+SRC:=./src
+LIB:=./lib
+
 OBJS = $(SRCS_ASM:.S=.o)
 OBJS += $(SRCS_C:.c=.o)
 
@@ -75,11 +79,14 @@ os.elf: $(OBJS)
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
 	$(OBJCOPY) -O binary $@ os.bin
 
-%.o : %.c
-	$(CC) $(CFLAGS) -c -o $@ $<
+%.o : $(SRC)/%.c
+	$(CC) $(CFLAGS) $(INCLUDE) -c -o $@ $<
 
-%.o : %.S
-	$(CC) $(CFLAGS) -c -o $@ $<
+%.o : $(LIB)/%.c
+	$(CC) $(CFLAGS) $(INCLUDE) -c -o $@ $<
+
+%.o : $(SRC)/%.S
+	${CC} ${CFLAGS} $(INCLUDE) -c -o $@ $<
 
 .PHONY : clean
 clean:

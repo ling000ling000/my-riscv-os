@@ -1,7 +1,7 @@
 //
 // Created by kk on 2026/2/6.
 //
-#include "os.h"
+#include "../include/os.h"
 
 // 定义用户栈大小
 #define USER_STACK_SIZE (4096 * 2)

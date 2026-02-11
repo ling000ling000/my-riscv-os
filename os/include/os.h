@@ -4,10 +4,10 @@
 #include <stddef.h>
 #include <stdarg.h>
 
-#include "../types.h"
+#include "types.h"
 #include "context.h"
-#include "include/riscv.h"
-#include "../task.h"
+#include "riscv.h"
+#include "task.h"
 
 // printf.c
 extern int printf(const char *format, ...);

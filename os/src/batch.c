@@ -2,8 +2,8 @@
 // Created by kk on 2026/2/4.
 //
 #include <stddef.h>
-#include "os.h"
-#include "context.h"
+#include "../include/os.h"
+#include "../include/context.h"
 #define USER_STACK_SIZE (4096 * 2)
 #define KERNEL_STACK_SIZE (4096 * 2)
 #define APP_BASE_ADDRESS 0x80600000

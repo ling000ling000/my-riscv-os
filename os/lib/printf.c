@@ -1,4 +1,4 @@
-#include "os.h"
+#include "../include/os.h"
 
 void uart_puts(const char *s)
 {

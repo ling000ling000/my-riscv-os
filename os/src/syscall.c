@@ -1,7 +1,7 @@
 //
 // Created by kk on 2026/2/6.
 //
-#include "os.h"
+#include "../include/os.h"
 
 void __sys_yield(void);
 void __sys_exit(int code);   // 如果你也会调用它

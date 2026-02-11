@@ -1,7 +1,7 @@
 //
 // Created by kk on 2026/2/7.
 //
-#include "os.h"
+#include "../include/os.h"
 
 size_t syscall(size_t id, reg_t arg1, reg_t arg2, reg_t arg3)
 {

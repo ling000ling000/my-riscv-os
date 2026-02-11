@@ -1,9 +1,9 @@
 //
 // Created by kk on 2026/2/5.
 //
-#include "os.h"
-#include "context.h"
-#include "riscv.h"
+#include "../include/os.h"
+#include "../include/context.h"
+#include "../include/riscv.h"
 
 // 声明外部符号 __alltraps
 // 这个符号在汇编文件 (entry.S) 中定义，是所有中断/异常的统一汇编入口
