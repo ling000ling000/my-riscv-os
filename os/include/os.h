@@ -8,10 +8,14 @@
 #include "context.h"
 #include "riscv.h"
 #include "task.h"
+#include "stdio.h"
 
 // printf.c
-extern int printf(const char *format, ...);
-extern void panic(const char *fmt, ...);
+// extern int printk(const char *format, ...);
+// extern void panic(const char *fmt, ...);
+// extern void sbi_console_putchar(int ch);
+
+// sbi.c
 extern void sbi_console_putchar(int ch);
 
 // kerneltrap.S
@@ -30,6 +34,9 @@ uint64_t __SYSCALL(size_t syscall_id, reg_t arg1, reg_t arg2, reg_t arg3);
 #define __NR_write 64
 #define __NR_shced_yield 124
 #define __NR_gettimeofday 169
+uint64_t sys_write(size_t fd, const char* buf, size_t len);
+uint64_t sys_yield();
+uint64_t sys_get_time();
 
 // switch.S
 extern void __switch(TaskContext *current_task_cx_ptr, TaskContext* next_task_cx_ptr);

@@ -2,7 +2,7 @@
 
 void os_main()
 {
-    printf("hello world!\n");
+    printk("hello world!\n");
 
     trap_init();
 
@@ -12,7 +12,7 @@ void os_main()
 
     set_next_trigger();        // 启动第一次中断
 
-    printf("[os] before run_first_task\n");
+    printk("[os] before run_first_task\n");
     run_first_task();
-    printf("[os] after run_first_task (should never happen)\n");
+    printk("[os] after run_first_task (should never happen)\n");
 }

@@ -10,7 +10,7 @@ if [ ! -d "$SHELL_FOLDER/output/qemu" ]; then
 ./configure --prefix=$SHELL_FOLDER/output/qemu  --target-list=riscv64-softmmu --enable-gtk  --enable-virtfs --disable-gio
 fi  
 make -j16$PROCESSORS
-make install || true
+#make install || true
 
 
 # # 编译 lowlevelboot
@@ -63,9 +63,9 @@ $CROSS_PREFIX-objcopy -O binary -S $SHELL_FOLDER/output/trusted_domain/trusted_f
 $CROSS_PREFIX-objdump --source --demangle --disassemble --reloc --wide $SHELL_FOLDER/output/trusted_domain/trusted_fw.elf > $SHELL_FOLDER/output/trusted_domain/trusted_fw.lst
 
 # # 编译uboot
-# if [ ! -d "$SHELL_FOLDER/output/uboot" ]; then  
+# if [ ! -d "$SHELL_FOLDER/output/uboot" ]; then
 # mkdir $SHELL_FOLDER/output/uboot
-# fi  
+# fi
 # cd $SHELL_FOLDER/u-boot-2023.04
 # make CROSS_COMPILE=riscv64-unknown-linux-gnu- qemu-riscv64_smode_defconfig
 # make CROSS_COMPILE=riscv64-unknown-linux-gnu-  -j16
@@ -73,7 +73,7 @@ $CROSS_PREFIX-objdump --source --demangle --disassemble --reloc --wide $SHELL_FO
 # cp $SHELL_FOLDER/u-boot-2023.04/u-boot.map $SHELL_FOLDER/output/uboot/u-boot.map
 # cp $SHELL_FOLDER/u-boot-2023.04/u-boot.bin $SHELL_FOLDER/output/uboot/u-boot.bin
 # riscv64-unknown-linux-gnu-objdump --source --demangle --disassemble --reloc --wide $SHELL_FOLDER/output/uboot/u-boot.elf > $SHELL_FOLDER/output/uboot/u-boot.lst
-
+#
 # # 生成uboot.dtb
 # cd $SHELL_FOLDER/dts
 # dtc -I dts -O dtb -o $SHELL_FOLDER/output/uboot/quard_star_uboot.dtb quard_star_uboot.dts

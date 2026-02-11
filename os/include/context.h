@@ -5,7 +5,7 @@
 #ifndef MY_RISCV_OS_CONTEXT_H
 #define MY_RISCV_OS_CONTEXT_H
 
-#include "../os.h"
+#include "os.h"
 
 // S Mode的 trap 上下文
 typedef struct pt_reg {

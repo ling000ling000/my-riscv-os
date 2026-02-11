@@ -25,12 +25,12 @@ size_t syscall(size_t id, reg_t arg1, reg_t arg2, reg_t arg3)
     return ret;
 }
 
-size_t sys_write(size_t fd, const char* buf, size_t len)
+uint64_t sys_write(size_t fd, const char* buf, size_t len)
 {
     syscall(__NR_write, fd, buf, len);
 }
 
-size_t sys_yield()
+uint64_t sys_yield()
 {
     syscall(__NR_shced_yield, 0, 0, 0);
 }
@@ -52,7 +52,7 @@ void task1()
     int len = strlen(message);
     while (1)
     {
-        sys_write(1, message, len);
+        printf(message);
         task_delay(10000);
         sys_yield();
     }
@@ -65,7 +65,7 @@ void task2()
     int len = strlen(message);
     while (1)
     {
-        sys_write(1, message, len);
+        printf(message);
         // task_delay(10000);
         // sys_yield();
     }
@@ -80,7 +80,7 @@ void task3()
         uint64_t end = start + 50000;   // 50ms 或 50,000us 取决于你的时间单位
 
         while (sys_get_time() < end) {
-            sys_write(1, message, len);
+            printf(message);
             sys_yield();
         }
     }

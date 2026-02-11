@@ -42,20 +42,20 @@ pt_reg_t* trap_handler(pt_reg_t* cx)
                     tick_cnt++;
                     if ((tick_cnt % 10) == 0)
                     {   // 每10次打印一次，避免刷屏影响调度
-                        printf("[tick] delta=%lu us\n", (unsigned long)(now_us - last_us));
+                        printk("[tick] delta=%lu us\n", (unsigned long)(now_us - last_us));
                     }
                 }
-                else printf("[tick] now=%lu us\n", (unsigned long)now_us);
+                else printk("[tick] now=%lu us\n", (unsigned long)now_us);
                 last_us = now_us;
 
-                printf("[trap_handler]clock interrupt\n");
+                printk("[trap_handler]clock interrupt\n");
                 set_next_trigger(); // 重置下一次时钟中断触发的时间
                 schedule();
                 break;
             }
         default:
             {
-                printf("undfined interrrupt scause:%x\n", scause);
+                printk("undfined interrrupt scause:%x\n", scause);
                 // panic("unkonwn scause: %d\n", scause);
                 break;
             }
@@ -75,7 +75,7 @@ pt_reg_t* trap_handler(pt_reg_t* cx)
             }
         default:
             {
-                printf("scause=%lx sepc=%lx stval=%lx sstatus=%lx\n", r_scause(), r_sepc(), r_stval(), r_sstatus());
+                printk("scause=%lx sepc=%lx stval=%lx sstatus=%lx\n", r_scause(), r_sepc(), r_stval(), r_sstatus());
                 panic("unkonwn scause: %d\n", scause);
                 break;
             }

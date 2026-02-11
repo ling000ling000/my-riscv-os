@@ -67,8 +67,10 @@ SRCS_C = \
 	task.c \
 	app.c \
 	timer.c \
+	printk.c \
+	vsprintf.c \
 
-INCLUDE:=./include
+INCLUDE:=-I./include
 SRC:=./src
 LIB:=./lib
 
