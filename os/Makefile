@@ -69,6 +69,8 @@ SRCS_C = \
 	timer.c \
 	printk.c \
 	vsprintf.c \
+	stack.c \
+	address.c \
 
 INCLUDE:=-I./include
 SRC:=./src

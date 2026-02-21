@@ -1,7 +1,3 @@
-//
-// Created by kk on 2026/2/4.
-//
-
 #ifndef MY_RISCV_OS_TYPES_H
 #define MY_RISCV_OS_TYPES_H
 

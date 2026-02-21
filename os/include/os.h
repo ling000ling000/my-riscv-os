@@ -9,6 +9,7 @@
 #include "riscv.h"
 #include "task.h"
 #include "stdio.h"
+#include "address.h"
 
 // printf.c
 // extern int printk(const char *format, ...);
