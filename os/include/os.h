@@ -58,5 +58,6 @@ extern void timer_init();
 
 // string
 extern size_t strlen(const char *s);
+void* memset(void *dest, int ch, size_t count);
 
 #endif // __OS_H__

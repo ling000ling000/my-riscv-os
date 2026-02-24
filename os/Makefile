@@ -71,6 +71,7 @@ SRCS_C = \
 	vsprintf.c \
 	stack.c \
 	address.c \
+	assert.c \
 
 INCLUDE:=-I./include
 SRC:=./src

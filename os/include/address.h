@@ -4,6 +4,7 @@
 #include "types.h"
 #include "stack.h"
 
+
 #define PAGE_SIZE 0x1000 // 一页大小4b
 #define PAGE_SIZE_BITS 0xc // 页内偏移12
 
@@ -66,6 +67,7 @@ typedef struct
 // 地址转换
 PhysAddr phys_addr_from_size_t(uint64_t v);
 PhysPageNum phys_page_num_from_size_t(uint64_t v);
+PhysAddr phys_addr_from_pyhs_page_num(PhysPageNum pageNum);
 uint64_t size_t_from_phys_addr(PhysAddr v);
 uint64_t size_t_from_phys_page_num(PhysPageNum v);
 VirtAddr virt_addr_from_size_t(uint64_t v);
