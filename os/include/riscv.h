@@ -128,5 +128,51 @@ static inline void w_sie(reg_t x)
     asm volatile("csrw sie, %0" : : "r" (x));
 }
 
+/**
+ * @brief 写入SATP（Supervisor Address Translation and Protection）寄存器
+ * @param x 要写入SATP寄存器的64位数值（包含分页模式和页表根PPN）
+ * @note 该函数是RISC-V特权指令csrw的封装，仅S态（监管态）可执行
+ *       asm volatile 确保汇编指令不被编译器优化，保证执行顺序和完整性
+ */
+static inline void w_satp(reg_t x)
+{
+    // 内联汇编格式：asm volatile("汇编指令模板" : 输出操作数 : 输入操作数 : 破坏描述符)
+    // csrw satp, %0：将通用寄存器中的值（%0对应输入参数x）写入satp特权寄存器
+    // "r" (x)：表示将x放入任意通用寄存器（r约束），作为汇编指令的输入
+    asm volatile("csrw satp, %0" : : "r" (x));
+}
+
+/**
+ * @brief 读取SATP寄存器的值
+ * @return 从SATP寄存器读取的64位数值
+ * @note 该函数是RISC-V特权指令csrr的封装，仅S态（监管态）可执行
+ */
+static inline reg_t r_satp()
+{
+    // 定义临时变量x，用于存储从SATP寄存器读取的值
+    reg_t x;
+    // csrr %0, satp：将satp特权寄存器的值读取到通用寄存器（%0对应变量x）
+    // "=r" (x)：表示将汇编指令的结果写入变量x（=表示输出，r约束通用寄存器）
+    asm volatile("csrr %0, satp" : "=r" (x) );
+    return x;
+}
+
+/**
+ * @brief 刷新TLB（Translation Lookaside Buffer，地址转换旁路缓存）
+ * @note 该函数封装RISC-V的sfence.vma指令，用于清空TLB中的无效映射条目
+ *       确保页表修改后，CPU使用最新的地址映射关系
+ */
+static inline void sfence_vma()
+{
+    // the zero, zero means flush all TLB entries.
+    // （原注释：两个zero参数表示刷新所有TLB条目，不限制地址/ASID）
+
+    // sfence.vma：RISC-V的TLB刷新指令，格式为sfence.vma [rs1], [rs2]
+    // rs1=zero（x0寄存器，值恒为0）：表示刷新所有虚拟地址的TLB条目
+    // rs2=zero（x0寄存器）：表示刷新所有地址空间标识符（ASID）的TLB条目
+    // 组合效果：清空当前核的所有TLB缓存，适用于内核页表全局刷新场景
+    asm volatile("sfence.vma zero, zero");
+}
+
 
 #endif //MY_RISCV_OS_RISCV_H

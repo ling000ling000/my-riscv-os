@@ -4,6 +4,15 @@
 #include "types.h"
 #include "stack.h"
 
+// 页表权限位掩码
+#define PTE_V (1 << 0) // 有效位
+#define PTE_R (1 << 1) // 可读权限
+#define PTE_W (1 << 2) // 可写
+#define PTE_X (1 << 3) // 可执行
+#define PTE_U (1 << 4) // 用户态可访问
+#define PTE_G (1 << 5) // 全局映射
+#define PTE_A (1 << 6) // 访问位
+#define PTE_D (1 << 7) // 脏位
 
 #define PAGE_SIZE 0x1000 // 一页大小4b
 #define PAGE_SIZE_BITS 0xc // 页内偏移12
@@ -15,6 +24,16 @@
 
 #define MEMORY_END 0x80800000 // 可用内存结束地址
 #define MEMORY_START 0x80200000 // 可用内存起始地址
+
+#define KERNBASE 0x80200000L
+
+// 宏定义：SATP寄存器的SV39模式标识位
+#define SATP_SV39 (8L << 60)
+
+// 宏定义：构造SATP寄存器的值
+// SATP_SV39：设置分页模式为SV39
+// pagetable：页表根节点的物理页号（PPN），占据SATP寄存器的低44位（对于SV39）
+#define MAKE_SATP(pagetable) (SATP_SV39 | (((uint64_t)pagetable)))
 
 // 物理地址
 typedef struct
@@ -39,16 +58,6 @@ typedef struct
 {
     uint64_t value;
 } VirtPageNum;
-
-// 页表权限位掩码
-#define PTE_V (1 << 0) // 有效位
-#define PTE_R (1 << 1) // 可读权限
-#define PTE_W (1 << 2) // 可写
-#define PTE_X (1 << 3) // 可执行
-#define PTE_U (1 << 4) // 用户态可访问
-#define PTE_G (1 << 5) // 全局映射
-#define PTE_A (1 << 6) // 访问位
-#define PTE_D (1 << 7) // 脏位
 
 // 页表结构体
 typedef struct
@@ -92,5 +101,9 @@ void StackFrameAllocator_init(StackFrameAllocator *allocator, PhysPageNum l, Phy
 PhysPageNum StackFrameAllocator_alloc(StackFrameAllocator *allocator);
 void StackFrameAllocator_dealloc(StackFrameAllocator *allocator, PhysPageNum ppn);
 extern void frame_allocator_test();
+
+extern void frame_alloctor_init();
+extern void kvminit();
+extern void kvminithart();
 
 #endif //MY_RISCV_OS_ADDRESS_H

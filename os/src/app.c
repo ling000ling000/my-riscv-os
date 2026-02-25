@@ -5,24 +5,34 @@
 
 size_t syscall(size_t id, reg_t arg1, reg_t arg2, reg_t arg3)
 {
-    long ret;
-    asm volatile(
-        /*
-        * a7 放 syscall number
-        * a0=a fd, a1=buf, a2=len
-        * 返回值放 a0
-         */
-        "mv a7, %1\n\t"
-        "mv a0, %2\n\t"
-        "mv a1, %3\n\t"
-        "mv a2, %4\n\t"
-        "ecall\n\t"
-        "mv %0, a0"
-        : "=r" (ret)
-        : "r" (id), "r" (arg1), "r" (arg2), "r" (arg3)
-        : "a7", "a0", "a1", "a2", "memory"
-    );
-    return ret;
+    // long ret;
+    // asm volatile(
+    //     /*
+    //     * a7 放 syscall number
+    //     * a0=a fd, a1=buf, a2=len
+    //     * 返回值放 a0
+    //      */
+    //     "mv a7, %1\n\t"
+    //     "mv a0, %2\n\t"
+    //     "mv a1, %3\n\t"
+    //     "mv a2, %4\n\t"
+    //     "ecall\n\t"
+    //     "mv %0, a0"
+    //     : "=r" (ret)
+    //     : "r" (id), "r" (arg1), "r" (arg2), "r" (arg3)
+    //     : "a7", "a0", "a1", "a2", "memory"
+    // );
+    // return ret;
+    register uintptr_t a0 asm ("a0") = (uintptr_t)(arg1);
+    register uintptr_t a1 asm ("a1") = (uintptr_t)(arg2);
+    register uintptr_t a2 asm ("a2") = (uintptr_t)(arg3);
+    register uintptr_t a7 asm ("a7") = (uintptr_t)(id);
+
+    asm volatile ("ecall"
+              : "+r" (a0)
+              : "r" (a1), "r" (a2), "r" (a7)
+              : "memory");
+    return a0;
 }
 
 uint64_t sys_write(size_t fd, const char* buf, size_t len)

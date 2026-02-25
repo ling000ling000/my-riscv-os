@@ -35,7 +35,7 @@ uint64_t size_t_from_phys_page_num(PhysPageNum pageNum)
 }
 
 // 从物理页号转换成实际物理地址
-PhysAddr phys_addr_from_pyhs_page_num(PhysPageNum pageNum)
+PhysAddr phys_addr_from_phys_page_num(PhysPageNum pageNum)
 {
     PhysAddr addr;
     addr.value = pageNum.value << PAGE_SIZE_BITS;
@@ -79,6 +79,14 @@ uint64_t size_t_from_virt_page_num(VirtPageNum pageNum)
 }
 
 /*  ---页表项操作--- */
+
+// 根据物理页号和标志位构造一个PTE
+PageTableEntry PageTableEntry_new(PhysPageNum ppn, uint8_t PTEFlags) 
+{
+    PageTableEntry entry;
+    entry.bits = (ppn.value << 10) | PTEFlags;
+    return entry;
+}
 
 //
 PageTableEntry PageTableEntry_empty()
@@ -135,19 +143,27 @@ VirtPageNum virt_page_num_from_virt_addr(VirtAddr addr)
     return vpn;
 }
 
+/* 物理地址向下取整 */
+VirtPageNum floor_virts(VirtAddr virt_addr)
+{
+    VirtPageNum virt_page_num;
+    virt_page_num.value = virt_addr.value / PAGE_SIZE;
+    return virt_page_num;
+}
+
 /*---物理页帧访问---*/
 // 将物理页号转换为一个字节数组的指针，以便按字节访问该物理页的内存
 uint8_t* get_bytes_array(PhysPageNum phys_page_num)
 {
     // 先从物理页号转换成物理地址
-    PhysAddr addr = phys_addr_from_pyhs_page_num(phys_page_num);
+    PhysAddr addr = phys_addr_from_phys_page_num(phys_page_num);
     return (uint8_t*)addr.value;
 }
 
 // 将物理页号转换为一个页表项数组的指针，用于操作页表
 PageTableEntry* get_pte_array(PhysPageNum phys_page_num)
 {
-    PhysAddr addr = phys_addr_from_pyhs_page_num(phys_page_num);
+    PhysAddr addr = phys_addr_from_phys_page_num(phys_page_num);
     return (PageTableEntry*)addr.value;
 }
 
@@ -192,7 +208,7 @@ PhysPageNum StackFrameAllocator_alloc(StackFrameAllocator *allocator)
             ppn.value = allocator->current ++;
         }
     }
-    PhysAddr addr = phys_addr_from_pyhs_page_num(ppn);
+    PhysAddr addr = phys_addr_from_phys_page_num(ppn);
     memset(addr.value, 0, PAGE_SIZE);
     return ppn;
 }
@@ -221,34 +237,60 @@ void StackFrameAllocator_dealloc(StackFrameAllocator *allocator, PhysPageNum ppn
     push(&(allocator->recycled), ppnValue); // 回收物理页号
 }
 
-static StackFrameAllocator FrameAllocatorImpl;
+// static StackFrameAllocator FrameAllocatorImpl;
+// void frame_allocator_test()
+// {
+//     StackFrameAllocator_new(&FrameAllocatorImpl);
+//     StackFrameAllocator_init(&FrameAllocatorImpl, \
+//             floor_phys(phys_addr_from_size_t(MEMORY_START)), \
+//             ceil_phys(phys_addr_from_size_t(MEMORY_END)));
+//     printk("Memoery start:%d\n",floor_phys(phys_addr_from_size_t(MEMORY_START)));
+//     printk("Memoery end:%d\n",ceil_phys(phys_addr_from_size_t(MEMORY_END)));
+//     PhysPageNum frame[10];
+//     for (size_t i = 0; i < 5; i++)
+//     {
+//         frame[i] = StackFrameAllocator_alloc(&FrameAllocatorImpl);
+//         printk("frame id:%d\n",frame[i].value);
+//     }
+//     for (size_t i = 0; i < 5; i ++ )
+//     {
+//         StackFrameAllocator_dealloc(&FrameAllocatorImpl, frame[i]);
+//         printk("allocator->recycled.data.value: %d\n", FrameAllocatorImpl.recycled.data[i]);
+//         printk("frame id:%d\n", frame[i].value);
+//     }
+//     PhysPageNum frame_test[10];
+//     for (size_t i = 0; i < 5; i++)
+//     {
+//         frame[i] = StackFrameAllocator_alloc(&FrameAllocatorImpl);
+//         printk("frame id:%d\n", frame[i].value);
+//     }
+// }
 
-void frame_allocator_test()
+
+StackFrameAllocator FrameAllocatorImpl; // 定义栈式帧分配器的全局实例，用于管理物理内存帧（物理页）
+extern char kernelend[]; // kernelend 指向内核镜像在物理内存中加载的最后一个字节的下一个地址
+// 宏定义：将地址向下对齐到页大小的整数倍
+// PAGE_SIZE 通常是4KB（0x1000），PAGE_SIZE-1 是 0xFFF，~0xFFF 是页对齐掩码
+// 作用：忽略页内偏移，得到该地址所在页的起始地址
+#define PGROUNDDOWN(a) (((a)) & ~(PAGE_SIZE-1))
+/**
+ * @brief 初始化物理内存帧分配器
+ * @note 该函数是操作系统启动阶段的核心内存管理初始化函数，
+ *       负责划定可分配的物理内存范围并初始化分配器
+ */
+void frame_alloctor_init()
 {
     StackFrameAllocator_new(&FrameAllocatorImpl);
-    StackFrameAllocator_init(&FrameAllocatorImpl, \
-            floor_phys(phys_addr_from_size_t(MEMORY_START)), \
-            ceil_phys(phys_addr_from_size_t(MEMORY_END)));
-    printk("Memoery start:%d\n",floor_phys(phys_addr_from_size_t(MEMORY_START)));
-    printk("Memoery end:%d\n",ceil_phys(phys_addr_from_size_t(MEMORY_END)));
-    PhysPageNum frame[10];
-    for (size_t i = 0; i < 5; i++)
-    {
-        frame[i] = StackFrameAllocator_alloc(&FrameAllocatorImpl);
-        printk("frame id:%d\n",frame[i].value);
-    }
-    for (size_t i = 0; i < 5; i ++ )
-    {
-        StackFrameAllocator_dealloc(&FrameAllocatorImpl, frame[i]);
-        printk("allocator->recycled.data.value: %d\n", FrameAllocatorImpl.recycled.data[i]);
-        printk("frame id:%d\n", frame[i].value);
-    }
-    PhysPageNum frame_test[10];
-    for (size_t i = 0; i < 5; i++)
-    {
-        frame[i] = StackFrameAllocator_alloc(&FrameAllocatorImpl);
-        printk("frame id:%d\n", frame[i].value);
-    }
+
+    // 初始化帧分配器的内存管理范围
+    StackFrameAllocator_init(
+        &FrameAllocatorImpl,                     // 目标分配器实例
+        ceil_phys(phys_addr_from_size_t(kernelend)),  // 起始物理地址：内核结束地址向上取整到页边界
+        ceil_phys(phys_addr_from_size_t(MEMORY_END))  // 结束物理地址：系统内存上限向上取整到页边界
+    );
+
+    printk("Memory start:0x%lx\n", (uint64_t)kernelend);
+    printk("Memory end:0x%lx\n", (uint64_t)MEMORY_END);
 }
 
 /* 将虚拟页号分解为三级页表索引，按照从高到低的顺序返回 */
@@ -274,7 +316,7 @@ void indexes(VirtPageNum vpn, size_t* result)
 typedef struct
 {
     PhysPageNum root_ppn; // 根结点
-    Stack frames; // 页帧
+    // Stack frames; // 页帧
 } PageTable;
 
 // 函数功能：在三级页表中查找指定虚拟页号(vpn)对应的页表项(PTE)
@@ -299,7 +341,7 @@ PageTableEntry* find_pte_create(PageTable* pt, VirtPageNum vpn)
         {
             PhysPageNum frame = StackFrameAllocator_alloc(&FrameAllocatorImpl); // 分配一页物理内存（帧），用于存储下级页表
             *pte = PageTableEntry_new(frame, PTE_V); // 初始化新的PTE：关联分配的物理帧，并设置有效位(PTE_V)
-            push(&pt->frames, frame.value); // 将新分配的物理帧号压入页表的帧栈
+            // push(&pt->frames, frame.value); // 将新分配的物理帧号压入页表的帧栈
         }
         ppn = PageTableEntry_ppn(pte); // 取出当前PTE指向的下级页表物理页号，作为下一轮遍历的ppn
     }
@@ -327,11 +369,43 @@ PageTableEntry* find_pte(PageTable* pt, VirtPageNum vpn)
 }
 
 // 将虚拟页号(vpn)映射到物理页号(ppn)，并设置页表项标志位
-void PageTable_map(PageTable* pt, VirtPageNum vpn, PhysPageNum ppn, uint8_t pteflags)
+// void PageTable_map(PageTable* pt, VirtPageNum vpn, PhysPageNum ppn, uint8_t pteflags)
+// {
+//     PageTableEntry* pte = find_pte_create(pt,vpn);
+//     assert(!PageTableEntry_is_valid(pte));
+//     *pte = PageTableEntry_new(ppn,PTE_V | pteflags);
+// }
+/**
+ * @brief 建立虚拟地址到物理地址的连续映射
+ *
+ * @param pt        指向页表结构体的指针，操作的目标页表
+ * @param va        要映射的起始虚拟地址
+ * @param pa        要映射的起始物理地址
+ * @param size      要映射的内存大小（字节）
+ * @param pteflgs   页表项（PTE）的权限标志位（如读、写、执行权限等）
+ */
+void PageTable_map(PageTable* pt,VirtAddr va, PhysAddr pa, uint64_t size ,uint8_t pteflgs)
 {
-    PageTableEntry* pte = find_pte_create(pt,vpn);
-    assert(!PageTableEntry_is_valid(pte));
-    *pte = PageTableEntry_new(ppn,PTE_V | pteflags);
+    if(size == 0) panic("mappages: size");
+
+    PhysPageNum ppn = floor_phys(pa); // 将物理地址向下取整，转换为物理页号（PPN），忽略页内偏移
+    VirtPageNum vpn = floor_virts(va); // 将虚拟地址向下取整，转换为虚拟页号（VPN），忽略页内偏移
+    uint64_t last = (va.value + size - 1) / PAGE_SIZE; // 计算映射的最后一个虚拟页号：(起始虚拟地址 + 映射大小 - 1) / 页大小
+
+    //printk("ppn:%d\n",ppn.value);
+    for(;;)
+    {
+        PageTableEntry* pte = find_pte_create(pt,vpn); // 在页表中查找或创建对应虚拟页号的页表项（PTE）
+
+        assert(!PageTableEntry_is_valid(pte));
+        *pte = PageTableEntry_new(ppn,PTE_V | pteflgs); // 创建新的页表项：将物理页号与权限标志位组合
+
+        if( vpn.value == last ) // 检查是否已处理到最后一个需要映射的页
+            break;
+        // 一页一页映射，处理下一个虚拟页和对应的物理页
+        vpn.value+=1;
+        ppn.value+=1;
+    }
 }
 
 void PageTable_unmap(PageTable* pt, VirtPageNum vpn)
@@ -339,4 +413,67 @@ void PageTable_unmap(PageTable* pt, VirtPageNum vpn)
     PageTableEntry* pte = find_pte(pt,vpn);
     assert(!PageTableEntry_is_valid(pte));
     *pte = PageTableEntry_empty();
+}
+
+extern char etext[]; // 由链接脚本定义，指向内核代码段（text段）的结束地址
+/**
+ * @brief 创建并初始化内核页表（Kernel Virtual Memory Make）
+ * @return 初始化完成的内核页表结构体，包含页表根节点的物理页号
+ * @note 该函数是内核启动阶段的核心，负责建立内核虚拟地址到物理地址的映射
+ */
+PageTable kvmmake(void)
+{
+    PageTable pt;
+
+    PhysPageNum root_ppn = StackFrameAllocator_alloc(&FrameAllocatorImpl);
+    pt.root_ppn = root_ppn;
+    printk("root_ppn:0x%lx\n", root_ppn.value);
+    printk("root_pa:0x%lx\n", phys_addr_from_phys_page_num(root_ppn).value);
+    printk("etext:0x%lx\n",(uint64_t)etext);
+
+    // 映射内核代码段
+    PageTable_map(
+        &pt,                                    // 目标页表：当前正在构建的内核页表
+        virt_addr_from_size_t(KERNBASE),        // 起始虚拟地址：内核基地址（KERNBASE）
+        phys_addr_from_size_t(KERNBASE),        // 起始物理地址：与虚拟地址相同（内核地址空间恒等映射）
+        (uint64_t)etext - KERNBASE,                  // 映射大小：代码段长度（etext - 内核基地址）
+        PTE_R | PTE_X | PTE_U                   // 页表项权限：R(读)、X(执行)、U(用户态可访问，视系统设计而定)
+    );
+    printk("finish kernel text map!\n");
+
+    // 映射内核数据段和物理内存
+    PageTable_map(
+        &pt,                                    // 目标页表：当前正在构建的内核页表
+        virt_addr_from_size_t((uint64_t)etext),      // 起始虚拟地址：代码段结束地址（etext）
+        phys_addr_from_size_t((uint64_t)etext),      // 起始物理地址：与虚拟地址相同（恒等映射）
+        MEMORY_END - (uint64_t)etext,                // 映射大小：数据段+物理内存长度（内存上限 - 代码段结束地址）
+        PTE_R | PTE_W | PTE_U                   // 页表项权限：R(读)、W(写)、U(用户态可访问)
+    );
+    printk("finish kernel data and physical RAM map!\n");
+
+    return pt;
+}
+
+PageTable kernel_pagetable; // 内核页表结构体
+/**
+ * @brief 初始化内核页表（构建页表结构，但尚未启用分页）
+ * @note 该函数仅创建页表映射关系，不修改硬件寄存器，属于“准备阶段”
+ */
+void kvminit()
+{
+    kernel_pagetable = kvmmake();
+}
+
+/**
+ * @brief 在当前硬件核（hart）上启用内核页表（真正开启分页机制）
+ * @note 该函数是硬件层面的分页启用操作，针对RISC-V架构的SATP寄存器和TLB操作
+ */
+void kvminithart()
+{
+    printk("satp1:%lx\n", MAKE_SATP(kernel_pagetable.root_ppn.value));
+    sfence_vma(); // sfence_vma：RISC-V的TLB刷新指令，清空当前核的TLB缓存，避免旧的页表项生效
+    w_satp(MAKE_SATP(kernel_pagetable.root_ppn.value)); // w_satp：RISC-V写SATP寄存器的汇编封装函数，写入后分页机制立即生效
+    sfence_vma(); // 刷新TLB中过时的条目，确保新页表生效
+    reg_t satp = r_satp(); // 读取SATP寄存器的值并保存
+    printk("satp2:%lx\n", satp);
 }

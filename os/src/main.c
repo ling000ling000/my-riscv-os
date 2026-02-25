@@ -1,9 +1,17 @@
 #include "../include/os.h"
+#include "../include/assert.h"
 
 void os_main()
 {
     printk("hello world!\n");
-    frame_allocator_test();
+    // 内存分配器初始化
+    frame_alloctor_init();
+    kvminit();
+    kvminithart();
+    trap_init();
+
+
+    // frame_allocator_test();
     while (1) {}
 
     // trap_init();

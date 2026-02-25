@@ -4,7 +4,7 @@
 // 初始化
 void initStack(Stack *stack)
 {
-    stack->top = 0;
+    stack->top = -1;
 }
 
 bool isEmpty(Stack *stack)
