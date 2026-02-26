@@ -1,3 +1,4 @@
+#include "loader.h"
 #include "../include/os.h"
 #include "../include/assert.h"
 
@@ -6,6 +7,7 @@ void os_main()
     printk("hello world!\n");
     // 内存分配器初始化
     frame_alloctor_init();
+    printk("app num: %d\n", get_num_app());
     kvminit();
     kvminithart();
     trap_init();

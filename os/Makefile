@@ -73,6 +73,7 @@ SRCS_C = \
 	stack.c \
 	address.c \
 	assert.c \
+	loader.c \
 
 INCLUDE:=-I./include
 SRC:=./src
