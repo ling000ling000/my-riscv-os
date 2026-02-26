@@ -56,6 +56,7 @@ SRCS_ASM = \
 	entry.S \
 	kernel_trap.S \
 	switch.S \
+	link_app.S \
 
 SRCS_C = \
 	sbi.c \
@@ -93,9 +94,12 @@ os.elf: $(OBJS)
 %.o : $(SRC)/%.S
 	${CC} ${CFLAGS} $(INCLUDE) -c -o $@ $<
 
+build_app: build.c
+	gcc $< -o build.out
+
 .PHONY : clean
 clean:
-	rm -rf *.o *.bin *.elf
+	rm -rf *.o *.bin *.out
 
 .PHONY : clean install
 
