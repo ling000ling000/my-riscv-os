@@ -54,3 +54,15 @@ void sbi_set_timer(uint64_t stime_value)
               0, 0, 0, 0, 0 // 参数 3-7: 后续参数未被该功能使用，填充为 0 以满足函数签名
     );
 }
+
+/**
+* sbi_console_getchar() - 从控制台设备读取一个字节。
+*
+* 成功时返回从控制台读取的值，失败时返回负错误代码。
+*/
+int sbi_console_getchar(void)
+{
+    struct sbiret ret;
+    ret = sbi_ecall(SBI_EXT_0_1_CONSOLE_GETCHAR, 0, 0, 0, 0, 0, 0, 0);
+    return ret.error;
+}

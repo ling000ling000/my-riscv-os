@@ -1,6 +1,3 @@
-//
-// Created by kk on 2026/2/5.
-//
 #include "../include/os.h"
 #include "../include/context.h"
 #include "../include/riscv.h"
@@ -10,12 +7,28 @@
 extern void __alltraps(void);
 extern void __restore(pt_reg_t *next);
 
-/* Trap 处理主函数
- * 参数 cx: 指向内核栈上保存的上下文结构体 (TrapContext) 的指针
- * 该指针由 __alltraps 中的 "mv a0, sp" 指令传递而来
- */
-pt_reg_t* trap_handler(pt_reg_t* cx)
+void trap_from_kernel()
 {
+    panic("a trap from kernel!\n");
+}
+
+void set_kernel_trap_entry()
+{
+    w_stvec((reg_t)trap_from_kernel); // 写入stvec寄存器，参数为trap_from_kernel的地址
+}
+
+void set_user_trap_entry()
+{
+    w_stvec((reg_t)TRAMPOLINE); // TRAMPOLINE是跳板页的虚拟地址常量
+}
+
+/* Trap 处理主函数
+ */
+void trap_handler()
+{
+    set_kernel_trap_entry();
+    pt_reg_t* cx = get_current_trap_cx();
+
     // 读取 scause (Supervisor Cause) 寄存器
     // 该寄存器包含了一个数字，指示了当前陷入内核的具体原因 (是时钟中断、非法指令还是系统调用等)
     reg_t scause = r_scause();
@@ -34,29 +47,13 @@ pt_reg_t* trap_handler(pt_reg_t* cx)
             // 5:s mode时钟中断
         case 5:
             {
-                static uint64_t last_us = 0;
-                static uint32_t tick_cnt = 0;
-                uint64_t now_us = get_time_us();
-                if (last_us != 0)
-                {
-                    tick_cnt++;
-                    if ((tick_cnt % 10) == 0)
-                    {   // 每10次打印一次，避免刷屏影响调度
-                        printk("[tick] delta=%lu us\n", (unsigned long)(now_us - last_us));
-                    }
-                }
-                else printk("[tick] now=%lu us\n", (unsigned long)now_us);
-                last_us = now_us;
-
-                printk("[trap_handler]clock interrupt\n");
-                set_next_trigger(); // 重置下一次时钟中断触发的时间
-                schedule();
+                set_next_trigger();               // 设置下一次定时器中断的触发时间
+                schedule();                       // 执行进程调度，切换到下一个就绪进程
                 break;
             }
         default:
             {
                 printk("undfined interrrupt scause:%x\n", scause);
-                // panic("unkonwn scause: %d\n", scause);
                 break;
             }
         }
@@ -70,7 +67,7 @@ pt_reg_t* trap_handler(pt_reg_t* cx)
         case 8:
             {
                 cx->sepc += 4;
-                __SYSCALL(cx->a7, cx->a0, cx->a1, cx->a2);
+                cx->a0 = __SYSCALL(cx->a7, cx->a0, cx->a1, cx->a2);
                 break;
             }
         default:
@@ -82,7 +79,35 @@ pt_reg_t* trap_handler(pt_reg_t* cx)
         }
     }
 
-    return cx;
+    trap_return();
+}
+
+void trap_return()
+{
+    /* 把 stvec 设置为内核和应用地址空间共享的跳板页面的起始地址 */
+    set_user_trap_entry();
+    /* 当前任务 Trap 上下文的可直接访问地址 */
+    uint64_t trap_cx_ptr = get_current_trap_cx();
+    /* 要继续执行的应用地址空间的 token */
+    uint64_t user_satp = current_user_token();
+    // 计算__restore函数在跳板页中的绝对虚拟地址
+    uint64_t restore_va = (uint64_t)__restore - (uint64_t)__alltraps + TRAMPOLINE;
+
+    // printk("trap_cx_ptr:%p\n",trap_cx_ptr);
+    // printk("user_satp:%p\n",user_satp);
+    // printk("restore_va:%p\n",restore_va);
+
+    asm volatile (
+            "fence.i\n\t"
+            "mv a0, %0\n\t"  // 将trap_cx_ptr传递给a0寄存器
+            "mv a1, %1\n\t"  // 将user_satp传递给a1寄存器
+            "jr %2\n\t"      // 跳转到restore_va的位置执行代码
+            :
+            : "r" (trap_cx_ptr),
+            "r" (user_satp),
+            "r" (restore_va)
+            : "a0", "a1"
+        );
 }
 
 void trap_init()

@@ -1,6 +1,3 @@
-//
-// Created by kk on 2026/2/6.
-//
 #include "../include/os.h"
 
 // 定义用户栈大小
@@ -31,7 +28,8 @@ struct TaskContext tcx_init(reg_t kstack_ptr)
 
     // 核心设置：将返回地址 ra 设置为 __restore 函数的入口
     // 任务调度切换完成后，CPU 会跳转到 __restore 执行现场恢复
-    task_ctx.ra = __restore;
+    // task_ctx.ra = __restore;
+    task_ctx.ra = trap_return;
 
     // 设置栈指针 sp，指向内核栈顶保存的 TrapContext 位置
     task_ctx.sp = kstack_ptr;
@@ -52,6 +50,133 @@ struct TaskContext tcx_init(reg_t kstack_ptr)
     task_ctx.s11 = 0;
 
     return task_ctx; // 返回初始化完成的上下文结构
+}
+
+/*
+ * 为每个应用程序映射内核栈，内核地址空间已提前完成基础映射（如页表根节点、代码/数据段）
+ * kpgtbl：内核页表指针，所有映射都会写入这个页表
+ */
+void proc_mapstacks(PageTable* kpgtbl)
+{
+    // 定义任务控制块指针，遍历所有进程
+    struct TaskControlBlock *p;
+
+    // 遍历所有任务（从tasks数组起始到MAX_TASKS结束）
+    for(p = tasks; p < &tasks[MAX_TASKS]; p++)
+    {
+        // 1. 分配一个物理页作为该进程的内核栈物理内存
+        // kalloc()返回物理页号 → 转换为物理地址（PA）→ 转为char*类型
+        char *pa = (char*)phys_addr_from_phys_page_num(kalloc()).value;
+        // 检查分配是否失败（pa=0表示无空闲物理页）
+        if(pa == 0)
+            panic("kalloc");  // 分配失败则内核崩溃（panic）
+
+        // 2. 计算该进程内核栈的虚拟地址（VA）
+        // KSTACK是宏，根据进程索引（p - tasks）计算专属的虚拟地址
+        uint64_t va = KSTACK((int) (p - tasks));
+
+        // 3. 将内核栈的虚拟地址映射到物理地址（写入内核页表）
+        PageTable_map(
+          kpgtbl,                          // 目标页表（内核页表）
+          virt_addr_from_size_t(va + PAGE_SIZE),  // 虚拟起始地址（栈底）
+          phys_addr_from_size_t((uint64_t)pa),  // 物理起始地址
+          PAGE_SIZE,                       // 映射长度（一页，4KB）
+          PTE_R | PTE_W                    // 权限：可读可写，禁止执行
+        );
+
+        // 4. 记录该进程的内核栈顶地址到TCB中
+        // va + PAGE_SIZE 是栈底，va + 2*PAGE_SIZE 是栈顶（栈向低地址生长）
+        p->kstack = va + 2 * PAGE_SIZE;
+    }
+}
+
+// 为每个应用程序分配一页物理内存用于存储陷阱上下文
+void proc_trap(struct TaskControlBlock* p)
+{
+    p->trap_cx_ppn = phys_addr_from_phys_page_num(kalloc()).value; // 为每个程序分配一页trap物理内存
+    printk("trap value : %p\n", p->trap_cx_ppn);
+    memset(&p->task_context, 0, sizeof(p->task_context)); // 初始化任务上下文全部为0
+}
+
+extern char trampoline[];
+/* 为用户程序创建页表，映射跳板页和trap上下文页*/
+void proc_pagetable(struct TaskControlBlock* p)
+{
+    PageTable page_table;
+    page_table.root_ppn = kalloc();
+
+    // 映射跳板页到用户虚拟地址空间
+    PageTable_map(&page_table,
+               virt_addr_from_size_t(TRAMPOLINE),
+              phys_addr_from_size_t((uint64_t)trampoline),
+             PAGE_SIZE ,
+           PTE_R | PTE_X
+               );
+    printk("finish user TRAMPOLINE map!\n");
+
+    // 映射用户程序的trap上下文页到用户虚拟地址空间
+    PageTable_map(&page_table,
+               virt_addr_from_size_t(TRAPFRAME),
+              phys_addr_from_size_t(p->trap_cx_ppn),
+             PAGE_SIZE,
+           PTE_R | PTE_W );
+    printk("finish user TRAPFRAME map!\n");
+
+    p->page_table = page_table;
+    printk("p->pagetable:%p\n",p->page_table.root_ppn.value);
+}
+
+
+// 为指定ID的应用程序创建进程控制块（TCB），并初始化陷阱上下文和页表
+TaskControlBlock* task_create_pt(size_t app_id)
+{
+    if (_top < MAX_TASKS)
+    {
+        proc_trap(&tasks[app_id]); // 为应用程序分配一页物理内存，用于存储陷阱上下文,每个进程独立
+        proc_pagetable(&tasks[app_id]); // 为应用程序创建独立的用户页表，每个进程有专属页表，实现地址空间隔离
+        _top ++;
+    }
+    return &tasks[app_id];
+}
+
+/* 返回当前执行的应用程序的trap上下文的地址 */
+uint64_t get_current_trap_cx()
+{
+    return tasks[_current].trap_cx_ppn;
+}
+
+// 返回当前用户进程的页表token
+uint64_t current_user_token()
+{
+    extern uint64_t kernel_satp;
+    return kernel_satp;
+}
+
+extern uint64_t kernel_satp; // satp寄存器值
+void app_init(size_t app_id)
+{
+    pt_reg_t* cx_ptr = tasks[app_id].trap_cx_ppn;
+    reg_t sstatus = r_sstatus();
+    // 仅构造用户上下文的 sstatus，不修改当前内核正在运行的 CSR。
+    sstatus &= ~(1UL << 8); // SPP=0, sret 回到 U
+    sstatus |= (1UL << 5);  // SPIE=1, 进入 U 后允许后续时钟中断
+
+    cx_ptr->sepc = tasks[app_id].entry; // 设置程序入口
+    printk("cx_ptr->sepc:%p\n",cx_ptr->sepc);
+    cx_ptr->sstatus = sstatus;
+
+    cx_ptr->sp = (reg_t)tasks[app_id].ustack; // 设置用户栈虚拟地址
+    printk("cx_ptr->sp:%p\n",cx_ptr->sp);
+
+    cx_ptr->kernel_satp = kernel_satp; // 内核页表token
+    cx_ptr->kernel_sp = tasks[app_id].kstack; // 内核栈虚拟地址
+    printk("cx_ptr->kernel_sp:%p\n",cx_ptr->kernel_sp);
+
+    cx_ptr->trap_handler = (uint64_t)trap_handler; // trap handler地址
+    printk("cx_ptr->trap_handler:%p\n",cx_ptr->trap_handler);
+
+    tasks[app_id].task_context = tcx_init((reg_t)cx_ptr);
+    tasks[app_id].task_state = Ready;
 }
 
 // 创建新任务
@@ -153,9 +278,9 @@ void run_first_task()
 
     // 执行切换：加载 next_task_cx_ptr 中的内容并跳转
     // 这将加载 ra=__restore，最终通过 sret 进入任务 0 的用户代码
-    printf("[os] switching to first task: cx=%lx ra=%lx\n",
+    printk("[os] switching to first task: cx=%lx ra=%lx\n",
        (reg_t)&tasks[0].task_context, (reg_t)tasks[0].task_context.ra);
-    printf("[os] first task ksp(trapframe)=%lx\n", (reg_t)tasks[0].task_context.sp);
+    printk("[os] first task ksp(trapframe)=%lx\n", (reg_t)tasks[0].task_context.sp);
     __switch(&_unused, next_task_cx_ptr);
 
     // 如果 __switch 返回，说明系统逻辑出现严重错误

@@ -5,26 +5,21 @@
 void os_main()
 {
     printk("hello world!\n");
-    // 内存分配器初始化
-    frame_alloctor_init();
-    printk("app num: %d\n", get_num_app());
+    frame_alloctor_init(); // 内存分配器初始化
+    size_t app_num = get_num_app();
+    printk("app num: %d\n", app_num);
     kvminit();
-    kvminithart();
-    trap_init();
 
+    for (size_t i = 0; i < app_num; i++)
+    {
+        load_app(i);
+        app_init(i);
+    }
+    asm volatile("fence.i");
 
-    // frame_allocator_test();
-    while (1) {}
-
-    // trap_init();
-    //
-    // task_init();
-    //
-    // timer_init();  // 允许时钟中断
-    //
-    // set_next_trigger();        // 启动第一次中断
-    //
-    // printk("[os] before run_first_task\n");
-    // run_first_task();
-    // printk("[os] after run_first_task (should never happen)\n");
+    kvminithart(); // 映射内核
+    trap_init(); // 设置用户陷入入口为 __alltraps
+    timer_init();
+    run_first_task();
+    panic("run_first_task returned unexpectedly");
 }

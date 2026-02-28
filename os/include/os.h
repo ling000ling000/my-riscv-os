@@ -18,6 +18,7 @@
 
 // sbi.c
 extern void sbi_console_putchar(int ch);
+int sbi_console_getchar(void);
 
 // kerneltrap.S
 extern void __alltraps(void);
@@ -29,12 +30,16 @@ extern void app_init_context();
 
 // trap.c
 extern void trap_init();
+extern void trap_return();
+extern void trap_handler();
+extern void set_kernel_trap_entry();
 
 // syscall
 uint64_t __SYSCALL(size_t syscall_id, reg_t arg1, reg_t arg2, reg_t arg3);
 #define __NR_write 64
 #define __NR_shced_yield 124
 #define __NR_gettimeofday 169
+#define __NR_read 63
 uint64_t sys_write(size_t fd, const char* buf, size_t len);
 uint64_t sys_yield();
 uint64_t sys_get_time();
@@ -46,9 +51,15 @@ extern void __switch(TaskContext *current_task_cx_ptr, TaskContext* next_task_cx
 extern void schedule();
 extern void task_create(void (*task_entry)(void));
 extern void run_first_task();
+TaskControlBlock*  task_create_pt(size_t app_id); /* 创建应用页表 */
+void proc_mapstacks(PageTable* kpgtbl); /* 映射用户程序内核栈 */
+uint64_t get_current_trap_cx();
+uint64_t current_user_token();
+void app_init(size_t app_id);
 
 // app.c
 extern void task_init();
+char getchar();
 
 // timer.c
 extern void sbi_set_timer(uint64_t stime_value);
@@ -59,5 +70,6 @@ extern void timer_init();
 // string
 extern size_t strlen(const char *s);
 void* memset(void *dest, int ch, size_t count);
+void* memcpy(void* dest, const void* src, size_t n);
 
 #endif // __OS_H__

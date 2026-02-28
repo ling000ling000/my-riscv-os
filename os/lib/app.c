@@ -1,6 +1,3 @@
-//
-// Created by kk on 2026/2/7.
-//
 #include "../include/os.h"
 
 size_t syscall(size_t id, reg_t arg1, reg_t arg2, reg_t arg3)
@@ -35,15 +32,39 @@ size_t syscall(size_t id, reg_t arg1, reg_t arg2, reg_t arg3)
     return a0;
 }
 
+// uint64_t sys_write(size_t fd, const char* buf, size_t len)
+// {
+//     syscall(__NR_write, fd, buf, len);
+// }
+
+// uint64_t sys_yield()
+// {
+//     syscall(__NR_shced_yield, 0, 0, 0);
+// }
+
 uint64_t sys_write(size_t fd, const char* buf, size_t len)
 {
-    syscall(__NR_write, fd, buf, len);
+    return syscall(__NR_write, (reg_t)fd, (reg_t)buf, (reg_t)len);
+}
+
+int sys_read(size_t fd, char* buf, size_t len)
+{
+    return syscall(__NR_read, (reg_t)fd, (reg_t)buf, (reg_t)len);
+}
+
+// 获取一个字符
+char getchar()
+{
+    char data[1];
+    sys_read(stdin, data, 1);
+    return data[0];
 }
 
 uint64_t sys_yield()
 {
-    syscall(__NR_shced_yield, 0, 0, 0);
+    return syscall(__NR_shced_yield, 0, 0, 0);
 }
+
 
 void task_delay(volatile int count)
 {
@@ -56,6 +77,7 @@ uint64_t sys_get_time()
     return syscall(__NR_gettimeofday, 0, 0, 0);
 }
 
+#ifndef USER_APP
 void task1()
 {
     const char *message = "task1 is running!\n";
@@ -103,3 +125,4 @@ void task_init(void)
     task_create(task2);
     task_create(task3);
 }
+#endif

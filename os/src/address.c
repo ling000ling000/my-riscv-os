@@ -312,13 +312,6 @@ void indexes(VirtPageNum vpn, size_t* result)
     }
 }
 
-// 定义页表
-typedef struct
-{
-    PhysPageNum root_ppn; // 根结点
-    // Stack frames; // 页帧
-} PageTable;
-
 // 函数功能：在三级页表中查找指定虚拟页号(vpn)对应的页表项(PTE)
 // 若查找路径中的页表项不存在，则自动创建（分配物理页+初始化PTE）
 PageTableEntry* find_pte_create(PageTable* pt, VirtPageNum vpn)
@@ -346,6 +339,16 @@ PageTableEntry* find_pte_create(PageTable* pt, VirtPageNum vpn)
         ppn = PageTableEntry_ppn(pte); // 取出当前PTE指向的下级页表物理页号，作为下一轮遍历的ppn
     }
     return NULL;
+}
+
+// 分配一个空闲的物理页，返回其物理页号（PPN）
+PhysPageNum kalloc(void)
+{
+    // 调用全局的栈式帧分配器（StackFrameAllocator）的 alloc 方法
+    // FrameAllocatorImpl 是分配器的具体实例（全局单例）
+    PhysPageNum frame =  StackFrameAllocator_alloc(&FrameAllocatorImpl);
+    // 返回分配到的物理页号
+    return frame;
 }
 
 // 函数功能：在三级页表中查找指定虚拟页号(vpn)对应的页表项(PTE)
@@ -416,6 +419,7 @@ void PageTable_unmap(PageTable* pt, VirtPageNum vpn)
 }
 
 extern char etext[]; // 由链接脚本定义，指向内核代码段（text段）的结束地址
+extern char trampoline[];
 /**
  * @brief 创建并初始化内核页表（Kernel Virtual Memory Make）
  * @return 初始化完成的内核页表结构体，包含页表根节点的物理页号
@@ -425,7 +429,8 @@ PageTable kvmmake(void)
 {
     PageTable pt;
 
-    PhysPageNum root_ppn = StackFrameAllocator_alloc(&FrameAllocatorImpl);
+    // PhysPageNum root_ppn = StackFrameAllocator_alloc(&FrameAllocatorImpl);
+    PhysPageNum root_ppn =  kalloc();
     pt.root_ppn = root_ppn;
     printk("root_ppn:0x%lx\n", root_ppn.value);
     printk("root_pa:0x%lx\n", phys_addr_from_phys_page_num(root_ppn).value);
@@ -437,7 +442,7 @@ PageTable kvmmake(void)
         virt_addr_from_size_t(KERNBASE),        // 起始虚拟地址：内核基地址（KERNBASE）
         phys_addr_from_size_t(KERNBASE),        // 起始物理地址：与虚拟地址相同（内核地址空间恒等映射）
         (uint64_t)etext - KERNBASE,                  // 映射大小：代码段长度（etext - 内核基地址）
-        PTE_R | PTE_X | PTE_U                   // 页表项权限：R(读)、X(执行)、U(用户态可访问，视系统设计而定)
+        PTE_R | PTE_X                           // 页表项权限：R(读)、X(执行)
     );
     printk("finish kernel text map!\n");
 
@@ -447,14 +452,27 @@ PageTable kvmmake(void)
         virt_addr_from_size_t((uint64_t)etext),      // 起始虚拟地址：代码段结束地址（etext）
         phys_addr_from_size_t((uint64_t)etext),      // 起始物理地址：与虚拟地址相同（恒等映射）
         MEMORY_END - (uint64_t)etext,                // 映射大小：数据段+物理内存长度（内存上限 - 代码段结束地址）
-        PTE_R | PTE_W | PTE_U                   // 页表项权限：R(读)、W(写)、U(用户态可访问)
+        PTE_R | PTE_W                           // 页表项权限：R(读)、W(写)
     );
     printk("finish kernel data and physical RAM map!\n");
+
+    // 映射陷阱处理跳板（trampoline）到内核最高虚拟地址
+    PageTable_map(&pt,
+                  virt_addr_from_size_t(TRAMPOLINE),          // 虚拟地址（内核最高VA）
+                  phys_addr_from_size_t((uint64_t)trampoline),     // 物理地址（跳板代码的实际PA）
+                  PAGE_SIZE,                                  // 映射长度（一页）
+                  PTE_R | PTE_X );                            // 权限
+    printk("finish TRAMPOLINE Page map!\n");
+
+    // 为每个进程分配并映射内核栈
+    proc_mapstacks(&pt);
+    printk("finish kernel stack map!\n");
 
     return pt;
 }
 
 PageTable kernel_pagetable; // 内核页表结构体
+uint64_t kernel_satp;       // 当前内核页表对应的 SATP token
 /**
  * @brief 初始化内核页表（构建页表结构，但尚未启用分页）
  * @note 该函数仅创建页表映射关系，不修改硬件寄存器，属于“准备阶段”
@@ -470,9 +488,10 @@ void kvminit()
  */
 void kvminithart()
 {
-    printk("satp1:%lx\n", MAKE_SATP(kernel_pagetable.root_ppn.value));
+    kernel_satp = MAKE_SATP(kernel_pagetable.root_ppn.value);
+    printk("satp1:%lx\n", kernel_satp);
     sfence_vma(); // sfence_vma：RISC-V的TLB刷新指令，清空当前核的TLB缓存，避免旧的页表项生效
-    w_satp(MAKE_SATP(kernel_pagetable.root_ppn.value)); // w_satp：RISC-V写SATP寄存器的汇编封装函数，写入后分页机制立即生效
+    w_satp(kernel_satp); // w_satp：RISC-V写SATP寄存器的汇编封装函数，写入后分页机制立即生效
     sfence_vma(); // 刷新TLB中过时的条目，确保新页表生效
     reg_t satp = r_satp(); // 读取SATP寄存器的值并保存
     printk("satp2:%lx\n", satp);

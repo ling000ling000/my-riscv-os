@@ -25,10 +25,28 @@
 #define MEMORY_END 0x80800000 // 可用内存结束地址
 #define MEMORY_START 0x80200000 // 可用内存起始地址
 
+//内核开始地址
 #define KERNBASE 0x80200000L
 
+// Sv39的最大地址空间 512G
+#define MAXVA (1L << (9 + 9 + 9 + 12 - 1))
+
+//跳板页开始位置
+#define TRAMPOLINE (MAXVA - PAGE_SIZE)
+
+//计算应用内核栈的地址，每个应用的内核栈下都有一个无效的守卫页
+#define KSTACK(p) (TRAMPOLINE - ((p)+1)* 2*PAGE_SIZE)
+
+//Trap页开始位置
+#define TRAPFRAME (TRAMPOLINE - PAGE_SIZE)
+
+#define PGROUNDUP(sz)  (((sz)+PAGE_SIZE-1) & ~(PAGE_SIZE-1))
+#define PGROUNDDOWN(a) (((a)) & ~(PAGE_SIZE-1))
+
+#define MAKE_PAGETABLE(satp) ( satp & (SATP_SV39 - 1) )
+
 // 宏定义：SATP寄存器的SV39模式标识位
-#define SATP_SV39 (8L << 60)
+#define SATP_SV39 (8ULL << 60)
 
 // 宏定义：构造SATP寄存器的值
 // SATP_SV39：设置分页模式为SV39
@@ -73,10 +91,17 @@ typedef struct
     Stack recycled; // 回收栈
 } StackFrameAllocator;
 
+// 定义页表
+typedef struct
+{
+    PhysPageNum root_ppn; // 根结点
+    // Stack frames; // 页帧
+} PageTable;
+
 // 地址转换
 PhysAddr phys_addr_from_size_t(uint64_t v);
 PhysPageNum phys_page_num_from_size_t(uint64_t v);
-PhysAddr phys_addr_from_pyhs_page_num(PhysPageNum pageNum);
+PhysAddr phys_addr_from_phys_page_num(PhysPageNum pageNum);
 uint64_t size_t_from_phys_addr(PhysAddr v);
 uint64_t size_t_from_phys_page_num(PhysPageNum v);
 VirtAddr virt_addr_from_size_t(uint64_t v);
@@ -105,5 +130,10 @@ extern void frame_allocator_test();
 extern void frame_alloctor_init();
 extern void kvminit();
 extern void kvminithart();
+PhysPageNum kalloc(void);
+void PageTable_map(PageTable* pt,VirtAddr va, PhysAddr pa, uint64_t size ,uint8_t pteflgs);
+
+VirtPageNum floor_virts(VirtAddr virt_addr);
+PageTableEntry* find_pte(PageTable* pt, VirtPageNum vpn);
 
 #endif //MY_RISCV_OS_ADDRESS_H

@@ -7,18 +7,29 @@ MEMORY
 }
 SECTIONS
 {
+/*    skernel = .;   定义内核起始内存地址 */
+/*    .text : {*/
+/*    		*(.text .text.*)*/
+/*    	. = ALIGN(0x1000);*/
+/*        PROVIDE(etext = .);*/
+/*    	} >ram*/
+
     skernel = .;   /* 定义内核起始内存地址 */
-/*	.text : {*/
-/*		*(.text .text.*)*/
-/*	} >ram*/
     .text : {
-    		*(.text .text.*)
-    	. = ALIGN(0x1000);
+        *(.text.entry)
+        . = ALIGN(4K);
+        trampoline = .;
+        *(.text.trampoline);
+        . = ALIGN(4K);
+        _strampoline = .;
+        *(.text .text.*)
+        . = ALIGN(4K);
         PROVIDE(etext = .);
-    	} >ram
+    } >ram
 
 	.rodata : {
 		*(.rodata .rodata.*)
+		. = ALIGN(4K);
 	} >ram
 
 /*	.data : {*/
@@ -29,9 +40,10 @@ SECTIONS
 /*		PROVIDE(_data_end = .);*/
 /*	} >ram*/
 	.data : {
-		. = ALIGN(4096);
+/*		. = ALIGN(4096);*/
 		*(.sdata .sdata.*)
 		*(.data .data.*)
+		. = ALIGN(4K);
 		PROVIDE(_data_end = .);
 	} >ram
 
@@ -39,6 +51,7 @@ SECTIONS
 		*(.sbss .sbss.*)
 		*(.bss .bss.*)
 		*(COMMON)
+		. = ALIGN(4K);
 	} >ram
 
     PROVIDE(kernelend = .);

@@ -45,6 +45,11 @@ typedef struct pt_reg {
     // S模式下的特殊控制状态寄存器 (CSR)
     reg_t sstatus;
     reg_t sepc;
+
+    // mmu相关寄存器
+    reg_t kernel_satp; // 内核地址空间的satp
+    reg_t kernel_sp; // 内核栈 栈顶 虚拟地址
+    reg_t trap_handler; // 内核trap handler入口 虚拟地址
 } pt_reg_t;
 
 

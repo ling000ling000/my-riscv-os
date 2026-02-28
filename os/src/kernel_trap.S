@@ -1,3 +1,4 @@
+.section .text.trampoline
 .global __alltraps
 .align 4
 __alltraps:
@@ -10,16 +11,14 @@ __alltraps:
     # --- 步骤 2：在内核栈上开辟空间 ---
     # sp 向低地址移动，开辟 34 * 8 字节的空间
     # 34 个位置包括：32 个通用寄存器 + sstatus + sepc
-    addi sp, sp, -34*8
+    # addi sp, sp, -34*8
 
     # --- 步骤 3：保存通用寄存器 (x1-x31) ---
     # sd (Store Double word): 将 64 位寄存器值写入栈内存
     sd x1, 1*8(sp)    # 保存 ra (返回地址)
     # 跳过 x2 (sp)，因为此时 sp 寄存器已经指向内核栈，我们需要保存的是用户栈指针
     sd x3, 3*8(sp)
-
     sd x4, 4*8(sp) # 保存 tp (线程指针)
-
     # 依次保存剩余通用寄存器 x5 至 x31
     sd x5, 5*8(sp)
     sd x6, 6*8(sp)
@@ -60,13 +59,20 @@ __alltraps:
     csrr t2, sscratch
     sd t2, 2*8(sp)    # 将用户栈指针保存到结构体的x2 (sp)位置
 
-    # --- 步骤 5：调用 C 语言处理函数 ---
+    ## --- 步骤 5：调用 C 语言处理函数 ---
     # set input argument of trap_handler(cx: &mut TrapContext)
-    mv a0, sp         # 将当前 sp (即 TrapContext 结构体的起始地址) 赋值给 a0
+    # mv a0, sp         # 将当前 sp (即 TrapContext 结构体的起始地址) 赋值给 a0
                       # a0 是 RISC-V 调用约定的第一个参数寄存器
-    call trap_handler # 跳转执行 C 语言编写的 trap_handler 函数
-    mv sp, a0
-    j __restore
+    # call trap_handler # 跳转执行 C 语言编写的 trap_handler 函数
+    # mv sp, a0
+    # j __restore
+
+    # 第五步：加载内核地址空间信息和陷阱处理函数，切换到内核空间
+    ld t0, 34*8(sp)   # 从 TrapContext 偏移 34*8 加载 kernel_satp（内核页表地址）
+    ld t1, 36*8(sp)   # 从 TrapContext 偏移 36*8 加载 trap_handler 函数地址（内核的陷阱处理逻辑）
+    ld sp, 35*8(sp)   # 切换到内核栈的正确位置（TrapContext 之外的内核栈）
+    # 当前运行路径不在这里切换 satp，避免触发上层固件对 satp 写入的拦截。
+    jr t1             # 跳转到内核的 trap_handler 函数执行后续处理
 
 .global __restore
 .align 4
@@ -78,14 +84,24 @@ __restore:
 
     # 注意：此时 sscratch 的状态并不确定，需要通过恢复过程重置
 
+    # 入参说明：
+    # a0: 用户空间中 TrapContext 的地址（固定）
+    # a1: 用户空间的 satp 令牌（用户页表地址）
+
+    # 第一步：切换到用户地址空间
+    # 当前运行路径不在这里切换 satp，保持在同一地址空间执行。
+    csrw sscratch, a0 # 把 TrapContext 地址写入 sscratch（为后续栈交换做准备）
+    mv sp, a0         # 把 sp 指向 TrapContext 起始地址（内核栈上的上下文）
+
+
     # --- 步骤 1：恢复 CSR 状态 ---
     ld t0, 32*8(sp) # 从栈加载到原sstatus
     ld t1, 33*8(sp) # 从栈加载到原sepc
-    ld t2, 2*8(sp) # 从栈加载原用户栈指针
+    # ld t2, 2*8(sp) # 从栈加载原用户栈指针
 
     csrw sstatus, t0 # 写入sstatus寄存器
     csrw sepc, t1 # 写入sepc寄存器，设定sret返回后到跳转地址
-    csrw sscratch, t2 # 关键操作：将用户栈指针放回 sscratch
+    # csrw sscratch, t2 # 关键操作：将用户栈指针放回 sscratch
                       # 这是为了配合 __alltraps 开头的 csrrw 指令
 
     # --- 步骤 2：恢复通用寄存器 ---
@@ -124,16 +140,19 @@ __restore:
 
     # --- 步骤 3：释放栈空间并切换栈 ---
     # 此时 sp 仍指向内核栈，需回收之前分配的 34*8 字节空间
-    addi sp, sp, 34*8
+    # addi sp, sp, 34*8
 
     # 再次执行原子交换：
     # 操作前：sp 指向内核栈（栈底），sscratch 指向用户栈
     # 操作后：sp 指向用户栈，sscratch 指向内核栈（为下一次 Trap 做准备）
-    csrrw sp, sscratch, sp
+    # csrrw sp, sscratch, sp
 
     # --- 步骤 4：特权级返回 ---
     # sret (Supervisor Return):
     # 1. PC 跳转到 sepc 寄存器的值
     # 2. 特权级切换回 sstatus.SPP 指定的模式 (通常是 User 模式)
     # 3. 恢复 sstatus.SPIE 中断使能位
-    sret
+
+    # 第四步：恢复用户栈地址，返回用户态
+    ld sp, 2*8(sp)    # 从 TrapContext 读取保存的用户栈地址，恢复到 sp
+    sret              # 特权级返回指令：从S模式切回U模式，跳转到sepc指向的地址执行

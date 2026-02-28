@@ -6,7 +6,7 @@ static int _vprintf(const char *s, va_list vl)
 {
     int res = _vsnprintf(NULL, -1, s, vl); // 这一步仅仅是为了计算格式化后的字符串会有多长，返回值 res 是字符数
     _vsnprintf(out_buf, res + 1, s, vl); //
-    sys_write(stdout, out_buf, res + 1); // 调用系统调用
+    sys_write(stdout, out_buf, res); // 仅写入有效字符，避免把字符串结尾的 '\0' 输出到控制台
     return res;
 }
 
