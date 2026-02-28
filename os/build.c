@@ -44,12 +44,14 @@ void insert_app_data()
         }
 
         int len = (int)strlen(name_with_ext);
-        if (len <= 4 || strcmp(name_with_ext + len - 4, ".bin") != 0) {
+        if (len <= 4 || strcmp(name_with_ext + len - 4, ".bin") != 0)
+        {
             continue;
         }
 
         char* app_name = (char*)malloc((size_t)len - 3);
-        if (app_name == NULL) {
+        if (app_name == NULL)
+        {
             perror("Failed to alloc memory");
             exit(EXIT_FAILURE);
         }
@@ -68,10 +70,19 @@ void insert_app_data()
     {
         fprintf(f, "\n.quad app_%d_start", i); // 写入每个应用的起始地址索引
     }
-    if (app_count > 0) {
+    if (app_count > 0)
+    {
         fprintf(f, "\n.quad app_%d_end", app_count - 1); // 写入最后一个应用的结束地址索引
-    } else {
+    }
+    else
+    {
         fprintf(f, "\n.quad 0");
+    }
+
+    fprintf(f, "\n.global _app_names\n_app_names: ");
+    for (int i = 0; i < app_count; i ++ )
+    {
+        fprintf(f, "\n.string \"%s\"", apps[i]);
     }
 
     for (int i = 0; i < app_count; i ++ ) // 遍历每个应用，写入对应的汇编代码（嵌入二进制文件）

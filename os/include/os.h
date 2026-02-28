@@ -48,6 +48,7 @@ uint64_t sys_get_time();
 extern void __switch(TaskContext *current_task_cx_ptr, TaskContext* next_task_cx_ptr);
 
 // task.c
+#define MAX_TASKS 10
 extern void schedule();
 extern void task_create(void (*task_entry)(void));
 extern void run_first_task();

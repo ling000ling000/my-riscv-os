@@ -25,10 +25,10 @@ int main()
     uint64_t current_time = 0;
     while (1)
     {
-        // current_time = sys_get_time();
-        // printf("currnet time: %x\n", current_time);
-        char data = getchar();
-        printf("%c", data);
+        current_time = sys_get_time();
+        printf("currnet time: %x\n", current_time);
+        // char data = getchar();
+        // printf("%c", data);
 
     }
     return 0;

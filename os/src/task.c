@@ -78,7 +78,7 @@ void proc_mapstacks(PageTable* kpgtbl)
         // 3. 将内核栈的虚拟地址映射到物理地址（写入内核页表）
         PageTable_map(
           kpgtbl,                          // 目标页表（内核页表）
-          virt_addr_from_size_t(va + PAGE_SIZE),  // 虚拟起始地址（栈底）
+          virt_addr_from_size_t(va),  // 虚拟起始地址（栈底）
           phys_addr_from_size_t((uint64_t)pa),  // 物理起始地址
           PAGE_SIZE,                       // 映射长度（一页，4KB）
           PTE_R | PTE_W                    // 权限：可读可写，禁止执行
@@ -86,7 +86,7 @@ void proc_mapstacks(PageTable* kpgtbl)
 
         // 4. 记录该进程的内核栈顶地址到TCB中
         // va + PAGE_SIZE 是栈底，va + 2*PAGE_SIZE 是栈顶（栈向低地址生长）
-        p->kstack = va + 2 * PAGE_SIZE;
+        p->kstack = va + PAGE_SIZE;
     }
 }
 

@@ -60,6 +60,7 @@ typedef struct
 
 size_t get_num_app();
 AppMetaData get_app_data(size_t app_id);
+void get_app_name();
 void load_app(size_t app_id);
 
 #endif //MY_RISCV_OS_LOADER_H

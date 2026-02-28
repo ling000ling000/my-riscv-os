@@ -8,6 +8,7 @@ void os_main()
     frame_alloctor_init(); // 内存分配器初始化
     size_t app_num = get_num_app();
     printk("app num: %d\n", app_num);
+    get_app_name();
     kvminit();
 
     for (size_t i = 0; i < app_num; i++)

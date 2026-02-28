@@ -87,7 +87,7 @@ mkdir $SHELL_FOLDER/output/os
 fi
 cd $SHELL_FOLDER/os
 mkdir -p user/bin
-# make -C user write
+make -C user write
 make -C user time
 # 编译app加载模块
 make build_app

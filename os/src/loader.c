@@ -2,6 +2,8 @@
 
 extern uint64_t _num_app[];
 extern PageTable kernel_pagetable;
+extern char _app_names[];
+static char* app_names[MAX_TASKS];
 
 #define USER_APP_STRIDE 0x20000UL
 
@@ -20,6 +22,21 @@ AppMetaData get_app_data(size_t app_id)
 
     assert(app_id <= num_app);
     return meta_data;
+}
+
+void get_app_name()
+{
+    int app_num = get_num_app();
+    printk("****----APPs----****\n");
+
+    char *current_pos = (char *)_app_names;
+    for (size_t i = 0; i < app_num; i++ )
+    {
+        app_names[i] = current_pos; // 记录当前字符串起始地址
+        printk("%s\n", app_names[i]);
+        current_pos += strlen(current_pos) + 1;
+    }
+    printk("********************\n");
 }
 
 // 将ELF段权限标志（PF_R/PF_W/PF_X）转换为页表项（PTE）权限
