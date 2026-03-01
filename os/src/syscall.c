@@ -111,6 +111,10 @@ uint64_t __SYSCALL(size_t syscall_id, reg_t arg1, reg_t arg2, reg_t arg3)
             __sys_read(arg1, (char *)arg2, arg3);
             return 0;
         }
+    case __NR_clone:
+        {
+            return __sys_fork();
+        }
     default:
         {
             panic("unsupport syscall id:%d\n", syscall_id);

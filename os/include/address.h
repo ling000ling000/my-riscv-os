@@ -53,6 +53,9 @@
 // pagetable：页表根节点的物理页号（PPN），占据SATP寄存器的低44位（对于SV39）
 #define MAKE_SATP(pagetable) (SATP_SV39 | (((uint64_t)pagetable)))
 
+#define PTE2PA(pte) (((pte) >> 10) << 12) // 从页表项中提取物理地址
+#define PTE_FLAGS(pte) ((pte) & 0x3FF) // 提取权限标志位
+
 // 物理地址
 typedef struct
 {
@@ -135,5 +138,6 @@ void PageTable_map(PageTable* pt,VirtAddr va, PhysAddr pa, uint64_t size ,uint8_
 
 VirtPageNum floor_virts(VirtAddr virt_addr);
 PageTableEntry* find_pte(PageTable* pt, VirtPageNum vpn);
+int uvmcopy(PageTable* old, PageTable* new, uint64_t sz);
 
 #endif //MY_RISCV_OS_ADDRESS_H

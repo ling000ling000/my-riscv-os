@@ -10,6 +10,7 @@ void os_main()
     printk("app num: %d\n", app_num);
     get_app_name();
     kvminit();
+    proc_init();
 
     for (size_t i = 0; i < app_num; i++)
     {

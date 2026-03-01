@@ -27,11 +27,14 @@
 
 int main()
 {
-    const char *message = "task write is running!\n";
+    // const char *message = "task write is running!\n";
     // int len = strlen(message);
+    int pid = sys_fork();
     while (1)
     {
-        printf(message);
+        // printf(message);
+        printf("pid:%d\n",pid);
+        sys_yield();
     }
     return 0;
 }

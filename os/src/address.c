@@ -364,8 +364,10 @@ PageTableEntry* find_pte(PageTable* pt, VirtPageNum vpn)
     for (int i = 0; i < 3; i++ )
     {
         PageTableEntry* pte = &get_pte_array(ppn)[idx[i]];
-        if (i == 2) return pte;
-        if (!PageTableEntry_is_valid(pte)) return NULL;
+        if (!PageTableEntry_is_valid(pte))
+            return NULL;
+        if (i == 2)
+            return pte;
         ppn = PageTableEntry_ppn(pte);
     }
     return NULL;
@@ -409,6 +411,44 @@ void PageTable_map(PageTable* pt,VirtAddr va, PhysAddr pa, uint64_t size ,uint8_
         vpn.value+=1;
         ppn.value+=1;
     }
+}
+
+// 复制父进程整个用户空间地址到子进程(sz: 拷贝的字节数)
+int uvmcopy(PageTable* old, PageTable* new, uint64_t sz)
+{
+    PageTableEntry* pte;
+    uint64_t pa, i;
+    uint8_t flags;
+
+    // 遍历用户地址空间（按页遍历）
+    for (i = 0; i < sz; i += PAGE_SIZE)
+    {
+        VirtPageNum vpn = floor_virts(virt_addr_from_size_t(i)); // 计算虚拟页号
+        pte = find_pte(old, vpn); // 在源页表中查找对应的 PTE（页表项）
+        if (pte != 0)
+        {
+            uint64_t phyaddr = PTE2PA(pte->bits); // 将 PTE 中的物理页号转换为物理地址
+            flags = PTE_FLAGS(pte->bits); // 提取 PTE 中的权限标志位
+
+            // 分配新的物理页（子进程的内存）
+            PhysPageNum ppn = kalloc();
+            if (ppn.value == 0)
+                return -1;
+            uint64_t paddr = phys_addr_from_phys_page_num(ppn).value;
+
+            // 将源物理地址的内容 复制到 新物理地址
+            memcpy((void*)paddr, (void*)phyaddr, PAGE_SIZE);
+            printk("vaddr:%x\n", i);
+
+            // 创建映射,在新页表中，将相同的虚拟地址映射到新分配的物理地址，权限保持一致
+            PageTable_map(new,
+                          virt_addr_from_size_t(i),
+                          phys_addr_from_size_t(paddr),
+                          PAGE_SIZE,
+                          flags);
+        }
+    }
+    return 0;
 }
 
 void PageTable_unmap(PageTable* pt, VirtPageNum vpn)

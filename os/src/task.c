@@ -1,16 +1,11 @@
 #include "../include/os.h"
 
-// 定义用户栈大小
-#define USER_STACK_SIZE (4096 * 2)
-// 定义内核栈大小
-#define KERNEL_STACK_SIZE (4096 * 2)
-// 定义最大任务数
-#define MAX_TASKS 10
-
 // 记录当前正在运行的任务索引（ID）
 static int _current = 0;
 // 记录当前已创建的任务总数，指向栈顶
 static int _top = 0;
+// 分配pid
+int next_pid = 1;
 
 // 定义内核栈数组，二维数组，每个任务拥有独立的内核栈空间
 uint8_t KernelStack[MAX_TASKS][KERNEL_STACK_SIZE];
@@ -19,6 +14,65 @@ uint8_t UserStack[MAX_TASKS][USER_STACK_SIZE];
 
 // 定义任务控制块数组，用于存放所有任务的管理信息
 struct TaskControlBlock tasks[MAX_TASKS];
+extern PageTable kernel_pagetable;
+
+#if !ENABLE_PER_TASK_SATP
+// 兼容模式使用单一内核页表运行全部任务，fork 时必须给子进程单独栈页，避免父子共享同一用户栈。
+static int fork_setup_child_stack_compat(struct TaskControlBlock *p, struct TaskControlBlock *np, pt_reg_t *cx_ptr)
+{
+    uint64_t parent_stack_va = p->ustack - PAGE_SIZE;
+    uint64_t parent_stack_top = p->ustack;
+    VirtPageNum parent_stack_vpn = floor_virts(virt_addr_from_size_t(parent_stack_va));
+    PageTableEntry *parent_stack_pte = find_pte(&p->page_table, parent_stack_vpn);
+    if (parent_stack_pte == 0 || !PageTableEntry_is_valid(parent_stack_pte))
+        return -1;
+
+    uint64_t parent_stack_pa = PTE2PA(parent_stack_pte->bits);
+
+    PhysPageNum child_stack_ppn = kalloc();
+    if (child_stack_ppn.value == 0)
+        return -1;
+    uint64_t child_stack_pa = phys_addr_from_phys_page_num(child_stack_ppn).value;
+
+    uint64_t child_stack_top = 0x40000000UL + ((uint64_t)np->pid + 1) * USER_STACK_SIZE;
+    uint64_t child_stack_va = child_stack_top - PAGE_SIZE;
+
+    PageTable_map(&np->page_table,
+                  virt_addr_from_size_t(child_stack_va),
+                  phys_addr_from_size_t(child_stack_pa),
+                  PAGE_SIZE,
+                  PTE_R | PTE_W | PTE_U);
+
+    PageTable_map(&kernel_pagetable,
+                  virt_addr_from_size_t(child_stack_va),
+                  phys_addr_from_size_t(child_stack_pa),
+                  PAGE_SIZE,
+                  PTE_R | PTE_W | PTE_U);
+
+    memcpy((void *)child_stack_pa, (void *)parent_stack_pa, PAGE_SIZE);
+
+    long long delta = (long long)child_stack_top - (long long)p->ustack;
+    uint64_t *stack_words = (uint64_t *)child_stack_pa;
+    for (int i = 0; i < PAGE_SIZE / (int)sizeof(uint64_t); i++)
+    {
+        uint64_t v = stack_words[i];
+        if (v >= parent_stack_va && v <= parent_stack_top)
+            stack_words[i] = (uint64_t)((long long)v + delta);
+    }
+
+    reg_t *regs = &cx_ptr->x0;
+    for (int i = 0; i < 32; i++)
+    {
+        if (regs[i] >= parent_stack_va && regs[i] <= parent_stack_top)
+            regs[i] = (reg_t)((long long)regs[i] + delta);
+    }
+
+    np->ustack = child_stack_top;
+    if (np->base_size < child_stack_top)
+        np->base_size = child_stack_top;
+    return 0;
+}
+#endif
 
 // 初始化任务上下文结构体 TaskContext
 // 参数 kstack_ptr：该任务内核栈的栈顶指针（指向 TrapContext）
@@ -126,6 +180,16 @@ void proc_pagetable(struct TaskControlBlock* p)
     printk("p->pagetable:%p\n",p->page_table.root_ppn.value);
 }
 
+// 初始化全局进程控制块数组
+void proc_init()
+{
+    struct TaskControlBlock* pcb;
+    for (pcb = tasks; pcb < &tasks[MAX_TASKS]; pcb ++)
+    {
+        pcb->task_state = UnInit;
+    }
+}
+
 
 // 为指定ID的应用程序创建进程控制块（TCB），并初始化陷阱上下文和页表
 TaskControlBlock* task_create_pt(size_t app_id)
@@ -148,8 +212,12 @@ uint64_t get_current_trap_cx()
 // 返回当前用户进程的页表token
 uint64_t current_user_token()
 {
+#if ENABLE_PER_TASK_SATP
+    return MAKE_SATP(tasks[_current].page_table.root_ppn.value);
+#else
     extern uint64_t kernel_satp;
     return kernel_satp;
+#endif
 }
 
 extern uint64_t kernel_satp; // satp寄存器值
@@ -175,8 +243,10 @@ void app_init(size_t app_id)
     cx_ptr->trap_handler = (uint64_t)trap_handler; // trap handler地址
     printk("cx_ptr->trap_handler:%p\n",cx_ptr->trap_handler);
 
-    tasks[app_id].task_context = tcx_init((reg_t)cx_ptr);
+    /* 构造每个任务任务控制块中的任务上下文，设置 ra 寄存器为 trap_return 的入口地址*/
+    tasks[app_id].task_context = tcx_init((reg_t)tasks[app_id].kstack);
     tasks[app_id].task_state = Ready;
+    tasks[app_id].pid = alloc_pid(); // 分配pid
 }
 
 // 创建新任务
@@ -239,28 +309,36 @@ void schedule()
         return;
     }
 
-    /* 计算下一个任务的索引 */
-    int next = _current + 1;
-    // 使用取模运算实现循环队列
-    next = next % _top;
+    int current = _current;
+    int next = -1;
 
-    // 检查下一个任务是否ready
-    if (tasks[next].task_state == Ready)
+    // 轮询寻找可运行任务：
+    // 1) 优先 Ready
+    // 2) 容错：若某个“非当前任务”误标成 Running，也允许切过去恢复轮转
+    for (int i = 1; i <= _top; i++)
     {
-        // 获取当前任务的上下文指针
-        TaskContext *current_task_cx_ptr = &(tasks[_current].task_context);
-        // 获取下个任务的上下文指针
-        TaskContext *next_task_cx_ptr = &(tasks[next].task_context);
-
-        // 更新任务状态：下个任务运行，当前任务挂起
-        tasks[next].task_state = Running;
-        tasks[_current].task_state = Ready;
-
-        _current = next;
-
-        // 调用汇编函数 __switch 执行上下文切换
-        __switch(current_task_cx_ptr, next_task_cx_ptr);
+        int idx = (current + i) % _top;
+        TaskState st = tasks[idx].task_state;
+        if (st == Ready || (idx != current && st == Running))
+        {
+            next = idx;
+            break;
+        }
     }
+
+    if (next < 0 || next == current)
+        return;
+
+    TaskContext *current_task_cx_ptr = &(tasks[current].task_context);
+    TaskContext *next_task_cx_ptr = &(tasks[next].task_context);
+
+    if (tasks[current].task_state == Running)
+        tasks[current].task_state = Ready;
+    tasks[next].task_state = Running;
+    _current = next;
+
+    // 调用汇编函数 __switch 执行上下文切换
+    __switch(current_task_cx_ptr, next_task_cx_ptr);
 }
 
 // 启动第一个任务（仅在系统初始化阶段调用一次）
@@ -285,4 +363,86 @@ void run_first_task()
 
     // 如果 __switch 返回，说明系统逻辑出现严重错误
     panic("unreachable in run_first_task!");
+}
+
+// 分配pid
+int alloc_pid()
+{
+    int pid;
+    pid = next_pid;
+    next_pid ++;
+    return pid;
+}
+
+// 进程控制块（PCB）的分配与初始化
+struct TaskControlBlock* alloc_proc()
+{
+    struct TaskControlBlock* pcb;
+
+    // 遍历全部任务
+    for (pcb = tasks; pcb < &tasks[MAX_TASKS]; pcb ++)
+    {
+        // 查找tasks里的空闲槽位
+        if (pcb->task_state == UnInit)
+            goto found; // 找到空位，跳转到初始化代码块
+    }
+    return 0;
+
+found:
+    pcb->pid = alloc_pid(); // 分配进程id
+    pcb->task_state = Ready; // 修改进程状态
+    proc_trap(pcb); // 为进程分配一页内存存放trap上下文
+    proc_pagetable(pcb); // 创建用户程序的页表
+    return pcb;
+}
+
+int __sys_fork()
+{
+    struct TaskControlBlock* np; // 子进程
+    struct TaskControlBlock* p; // 父进程
+
+    p = &tasks[_current];
+
+    // 分配进程槽位，alloc_proc 会寻找一个状态为 UnInit 的 PCB 并初始化基础字段
+    if ((np = alloc_proc()) == 0)
+        return -1;
+
+    // 拷贝父进程的内存数据。这会遍历父进程页表，申请新物理页，拷贝数据，并建立子进程页表映射
+#if ENABLE_PER_TASK_SATP
+    if (uvmcopy(&p->page_table, &np->page_table, p->base_size) < 0)
+        return -1;
+#endif
+
+    // 复制trap上下文
+    memcpy((void*)np->trap_cx_ppn, (void*)p->trap_cx_ppn, PAGE_SIZE);
+
+    // 获取子进程 Trap 上下文的指针
+    pt_reg_t* cx_ptr = (pt_reg_t*)np->trap_cx_ppn;
+
+    // a0 是函数返回值寄存器, 子进程被调度运行时，会恢复这个 Trap 上下文，a0=0，因此用户态看到的返回值就是 0
+    cx_ptr->a0 = 0;
+    cx_ptr->kernel_sp = np->kstack;
+
+    // 复制tcb数据
+    np->entry = p->entry;
+    np->base_size = p->base_size;
+    np->parent = p;
+    np->ustack = p->ustack;
+
+#if !ENABLE_PER_TASK_SATP
+    if (fork_setup_child_stack_compat(p, np, cx_ptr) < 0)
+        return -1;
+#endif
+
+    // ra (返回地址): 设置为 trap_return。
+    // 当子进程第一次被调度器选中运行时，__switch 会跳转到 trap_return，
+    // 从而恢复 Trap 上下文，最终通过 sret 返回用户态。
+    np->task_context.ra = trap_return;
+
+    // sp (栈指针): 设置为子进程的内核栈顶。
+    // 这样子进程就有了独立的内核栈空间。
+    np->task_context.sp = np->kstack;
+
+    _top++; // 更新进程计数（可能是全局变量，记录活跃进程数）
+    return np->pid; // 父进程返回子进程的 PID
 }

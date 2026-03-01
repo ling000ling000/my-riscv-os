@@ -86,8 +86,12 @@ void trap_return()
 {
     /* 把 stvec 设置为内核和应用地址空间共享的跳板页面的起始地址 */
     set_user_trap_entry();
-    /* 当前任务 Trap 上下文的可直接访问地址 */
+    /* 当前任务 Trap 上下文地址：隔离模式使用用户虚拟地址 TRAPFRAME，兼容模式使用内核可直访物理地址。 */
+#if ENABLE_PER_TASK_SATP
+    uint64_t trap_cx_ptr = TRAPFRAME;
+#else
     uint64_t trap_cx_ptr = get_current_trap_cx();
+#endif
     /* 要继续执行的应用地址空间的 token */
     uint64_t user_satp = current_user_token();
     // 计算__restore函数在跳板页中的绝对虚拟地址

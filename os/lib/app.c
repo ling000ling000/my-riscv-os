@@ -65,6 +65,11 @@ uint64_t sys_yield()
     return syscall(__NR_shced_yield, 0, 0, 0);
 }
 
+int sys_fork()
+{
+    return syscall(__NR_clone, 0, 0, 0);
+}
+
 
 void task_delay(volatile int count)
 {

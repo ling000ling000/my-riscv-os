@@ -95,12 +95,14 @@ void load_app(size_t app_id)
                           phys_addr_from_size_t(paddr),
                          PAGE_SIZE,
                               map_perm);
-                // 同时映射到内核页表：当前运行路径不切换 satp，用户程序在内核页表下运行。
+                // 兼容模式下同时映射到内核页表（不切 satp 也可运行）。
+#if !ENABLE_PER_TASK_SATP
                 PageTable_map(&kernel_pagetable,
                            virt_addr_from_size_t(start_va + j),
                           phys_addr_from_size_t(paddr),
                          PAGE_SIZE,
                               map_perm);
+#endif
             }
         }
     }
@@ -119,7 +121,10 @@ void load_app(size_t app_id)
     // 大小：1个页（PAGE_SIZE）
     PageTable_map(&proc->page_table, virt_addr_from_size_t(proc->ustack - PAGE_SIZE),
                   phys_addr_from_size_t(paddr), PAGE_SIZE, PTE_R | PTE_W | PTE_U);
+#if !ENABLE_PER_TASK_SATP
     PageTable_map(&kernel_pagetable, virt_addr_from_size_t(proc->ustack - PAGE_SIZE),
                   phys_addr_from_size_t(paddr), PAGE_SIZE, PTE_R | PTE_W | PTE_U);
+#endif
 
+    proc->base_size = proc->ustack; // 虚拟地址空间的最大值
 }

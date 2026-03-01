@@ -71,7 +71,10 @@ __alltraps:
     ld t0, 34*8(sp)   # 从 TrapContext 偏移 34*8 加载 kernel_satp（内核页表地址）
     ld t1, 36*8(sp)   # 从 TrapContext 偏移 36*8 加载 trap_handler 函数地址（内核的陷阱处理逻辑）
     ld sp, 35*8(sp)   # 切换到内核栈的正确位置（TrapContext 之外的内核栈）
-    # 当前运行路径不在这里切换 satp，避免触发上层固件对 satp 写入的拦截。
+#if ENABLE_PER_TASK_SATP
+    csrw satp, t0       # 切回内核页表
+    sfence.vma zero, zero
+#endif
     jr t1             # 跳转到内核的 trap_handler 函数执行后续处理
 
 .global __restore
@@ -89,8 +92,11 @@ __restore:
     # a1: 用户空间的 satp 令牌（用户页表地址）
 
     # 第一步：切换到用户地址空间
-    # 当前运行路径不在这里切换 satp，保持在同一地址空间执行。
     csrw sscratch, a0 # 把 TrapContext 地址写入 sscratch（为后续栈交换做准备）
+#if ENABLE_PER_TASK_SATP
+    csrw satp, a1       # 切到当前任务的用户页表
+    sfence.vma zero, zero
+#endif
     mv sp, a0         # 把 sp 指向 TrapContext 起始地址（内核栈上的上下文）
 
 

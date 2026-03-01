@@ -40,9 +40,11 @@ uint64_t __SYSCALL(size_t syscall_id, reg_t arg1, reg_t arg2, reg_t arg3);
 #define __NR_shced_yield 124
 #define __NR_gettimeofday 169
 #define __NR_read 63
+#define __NR_clone 220
 uint64_t sys_write(size_t fd, const char* buf, size_t len);
 uint64_t sys_yield();
 uint64_t sys_get_time();
+int sys_fork();
 
 // switch.S
 extern void __switch(TaskContext *current_task_cx_ptr, TaskContext* next_task_cx_ptr);
@@ -57,6 +59,8 @@ void proc_mapstacks(PageTable* kpgtbl); /* 映射用户程序内核栈 */
 uint64_t get_current_trap_cx();
 uint64_t current_user_token();
 void app_init(size_t app_id);
+int __sys_fork();
+void proc_init();
 
 // app.c
 extern void task_init();
