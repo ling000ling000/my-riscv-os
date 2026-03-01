@@ -45,8 +45,6 @@ OBJDUMP = $(CROSS_COMPILE)objdump
 # 编译阶段：不要 -nostdlib
 #CFLAGS  = -ffreestanding -fno-builtin -O2 -g
 CFLAGS  = -ffreestanding -fno-builtin -O2 -g -mcmodel=medany -Wno-int-conversion
-ENABLE_PER_TASK_SATP ?= 0
-CFLAGS  += -DENABLE_PER_TASK_SATP=$(ENABLE_PER_TASK_SATP)
 
 
 # 链接阶段：才用 -nostdlib，避免去找 -lc/-lgloss

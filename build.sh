@@ -3,7 +3,6 @@ set -eo pipefail
 
 # 获取当前脚本文件所在的目录
 SHELL_FOLDER=$(cd "$(dirname "$0")";pwd)
-ENABLE_PER_TASK_SATP=${ENABLE_PER_TASK_SATP:-0}
 
 if [ ! -d "$SHELL_FOLDER/output" ]; then  
 mkdir $SHELL_FOLDER/output
@@ -91,10 +90,10 @@ mkdir -p user/bin
 #make -C user write
 make -C user time
 # 编译app加载模块
-make ENABLE_PER_TASK_SATP=$ENABLE_PER_TASK_SATP build_app
+make build_app
 ./build.out
 # 编译os
-make ENABLE_PER_TASK_SATP=$ENABLE_PER_TASK_SATP
+make
 cp $SHELL_FOLDER/os/os.bin $SHELL_FOLDER/output/os/os.bin
 make clean
 

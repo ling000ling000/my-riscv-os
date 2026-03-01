@@ -16,7 +16,6 @@ uint8_t UserStack[MAX_TASKS][USER_STACK_SIZE];
 struct TaskControlBlock tasks[MAX_TASKS];
 extern PageTable kernel_pagetable;
 
-#if !ENABLE_PER_TASK_SATP
 // 兼容模式使用单一内核页表运行全部任务，fork 时必须给子进程单独栈页，避免父子共享同一用户栈。
 static int fork_setup_child_stack_compat(struct TaskControlBlock *p, struct TaskControlBlock *np, pt_reg_t *cx_ptr)
 {
@@ -72,7 +71,6 @@ static int fork_setup_child_stack_compat(struct TaskControlBlock *p, struct Task
         np->base_size = child_stack_top;
     return 0;
 }
-#endif
 
 // 初始化任务上下文结构体 TaskContext
 // 参数 kstack_ptr：该任务内核栈的栈顶指针（指向 TrapContext）
@@ -212,12 +210,8 @@ uint64_t get_current_trap_cx()
 // 返回当前用户进程的页表token
 uint64_t current_user_token()
 {
-#if ENABLE_PER_TASK_SATP
-    return MAKE_SATP(tasks[_current].page_table.root_ppn.value);
-#else
     extern uint64_t kernel_satp;
     return kernel_satp;
-#endif
 }
 
 extern uint64_t kernel_satp; // satp寄存器值
@@ -407,12 +401,6 @@ int __sys_fork()
     if ((np = alloc_proc()) == 0)
         return -1;
 
-    // 拷贝父进程的内存数据。这会遍历父进程页表，申请新物理页，拷贝数据，并建立子进程页表映射
-#if ENABLE_PER_TASK_SATP
-    if (uvmcopy(&p->page_table, &np->page_table, p->base_size) < 0)
-        return -1;
-#endif
-
     // 复制trap上下文
     memcpy((void*)np->trap_cx_ppn, (void*)p->trap_cx_ppn, PAGE_SIZE);
 
@@ -429,10 +417,8 @@ int __sys_fork()
     np->parent = p;
     np->ustack = p->ustack;
 
-#if !ENABLE_PER_TASK_SATP
     if (fork_setup_child_stack_compat(p, np, cx_ptr) < 0)
         return -1;
-#endif
 
     // ra (返回地址): 设置为 trap_return。
     // 当子进程第一次被调度器选中运行时，__switch 会跳转到 trap_return，
