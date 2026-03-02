@@ -52,6 +52,11 @@ int sys_read(size_t fd, char* buf, size_t len)
     return syscall(__NR_read, (reg_t)fd, (reg_t)buf, (reg_t)len);
 }
 
+int sys_exec(const char* name)
+{
+    return syscall(__NR_execve, 0, (reg_t)name, 0);
+}
+
 // 获取一个字符
 char getchar()
 {

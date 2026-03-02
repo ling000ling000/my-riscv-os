@@ -351,6 +351,11 @@ PhysPageNum kalloc(void)
     return frame;
 }
 
+void kfree(PhysPageNum ppn)
+{
+    StackFrameAllocator_dealloc(&FrameAllocatorImpl,ppn);
+}
+
 // 函数功能：在三级页表中查找指定虚拟页号(vpn)对应的页表项(PTE)
 // 特点：仅查找，不创建——若路径中任意一级PTE无效，直接返回NULL
 PageTableEntry* find_pte(PageTable* pt, VirtPageNum vpn)
@@ -413,6 +418,13 @@ void PageTable_map(PageTable* pt,VirtAddr va, PhysAddr pa, uint64_t size ,uint8_
     }
 }
 
+void PageTable_unmap(PageTable* pt, VirtPageNum vpn)
+{
+    PageTableEntry* pte = find_pte(pt,vpn);
+    assert(!PageTableEntry_is_valid(pte));
+    *pte = PageTableEntry_empty();
+}
+
 // 复制父进程整个用户空间地址到子进程(sz: 拷贝的字节数)
 int uvmcopy(PageTable* old, PageTable* new, uint64_t sz)
 {
@@ -451,11 +463,101 @@ int uvmcopy(PageTable* old, PageTable* new, uint64_t sz)
     return 0;
 }
 
-void PageTable_unmap(PageTable* pt, VirtPageNum vpn)
+// 取消用户虚拟地址的映射
+void uvmunmap(PageTable* pt, VirtPageNum vpn, uint64_t npages, int do_free)
 {
-    PageTableEntry* pte = find_pte(pt,vpn);
-    assert(!PageTableEntry_is_valid(pte));
-    *pte = PageTableEntry_empty();
+    PageTableEntry* pte;
+    uint64_t a; // 虚拟页号
+    for (a = vpn.value; a < vpn.value + npages; a ++)
+    {
+        printk("vpn.value:%d\n", a);
+
+        pte = find_pte(pt, virt_page_num_from_size_t(a));
+        if (pte != 0)
+        {
+            printk("pte->bits:%x\n", (uint64_t)pte->bits);
+
+            // 3. 如果需要释放物理内存
+            if(do_free)
+            {
+                // 从 PTE 提取物理地址
+                uint64_t phyaddr = PTE2PA(pte->bits);
+                // 将物理地址转换为物理页号
+                PhysPageNum ppn = floor_phys(phys_addr_from_size_t(phyaddr));
+
+                printk("ppn.value:%d\n", ppn.value);
+
+                // 【关键操作】释放物理内存页给分配器
+                kfree(ppn);
+            }
+            *pte = PageTableEntry_empty();
+        }
+    }
+}
+
+// 先释放所有用户数据占用的物理内存，然后释放页表索引结构本身占用的物理内存
+void uvmfree(PageTable* pt, uint64_t sz)
+{
+    // --- 步骤 1: 释放用户数据页 ---
+    // 如果进程占有内存（sz > 0），则需要进行清理
+    if(sz > 0)
+    {
+        // 调用 uvmunmap 清理从虚拟地址 0 开始的 sz/PAGE_SIZE 个页面
+        // virt_addr_from_size_t(0): 起始虚拟地址为 0
+        // sz/PAGE_SIZE: 计算页面总数
+        // 参数 '1' (do_free): 表示不仅要清除映射，还要调用 kfree 释放物理内存
+        uvmunmap(pt, floor_virts(virt_addr_from_size_t(0)), sz/PAGE_SIZE, 1);
+    }
+
+    // --- 步骤 2: 释放页表结构 ---
+    // 当所有数据页（叶子节点）都被清理干净后，释放页表本身的树形结构
+    // freewalk 会递归释放所有页表目录页（非叶子节点）
+    freewalk(pt->root_ppn);
+}
+
+// 解除页表映射关系,释放页表所占用的物理内存
+void freewalk(PhysPageNum ppn)
+{
+    for (int i = 0; i < 512; i ++)
+    {
+        PageTableEntry* pte = &get_pte_array(ppn)[i];
+        // 有效的非叶子节点 (分支), 判断条件：PTE有效(V=1) 且 没有任何数据权限(R=W=X=0)
+        if ((pte->bits & PTE_V) && (pte->bits & (PTE_R | PTE_W | PTE_X)) == 0)
+        {
+            PhysPageNum child_ppn = PageTableEntry_ppn(pte); // 取出下一级页表的物理页号
+            freewalk(child_ppn); // 递归
+            *pte = PageTableEntry_empty();
+        }
+        else if (pte->bits & PTE_V) // 有效的叶子节点 (数据页)
+        {
+            panic("freewalk: leaf"); // 意味着 freewalk 被调用时，页表中不应该还有映射的数据页
+        }
+    }
+    printk("free ppn:%d\n",ppn.value);
+    kfree(ppn);
+}
+
+// 进程退出时销毁地址空间
+void proc_free_page_table(PageTable* page_table, uint64_t sz)
+{
+    // --- 步骤 1: 处理跳板页 ---
+    // TRAMPOLINE 位于虚拟地址空间的最高处（或特定高位）。
+    // 参数 '0' (do_free) 表示只解除映射，不释放物理内存。
+    // 原因：跳板页是所有进程共享的，其物理内存由内核统一管理，
+    // 进程退出时只需“断开连接”，不能“拆掉公共设施”。
+    uvmunmap(page_table, floor_virts(virt_addr_from_size_t(TRAMPOLINE)), 1, 0);
+
+    // --- 步骤 2: 处理 Trap 上下文页 ---
+    // TRAPFRAME 用于保存用户进程陷入内核时的寄存器状态。
+    // 参数 '1' (do_free) 表示解除映射，并且释放物理内存。
+    // 原因：每个进程都有自己独立的 Trap 上下文，进程死了，这块内存就没用了，
+    // 必须回收给系统。
+    uvmunmap(page_table, floor_virts(virt_addr_from_size_t(TRAPFRAME)), 1, 1);
+
+    // --- 步骤 3: 释放剩余用户内存及页表结构 ---
+    // 这一步会清理所有用户数据页（代码、数据、堆、栈），
+    // 并最终调用 freewalk() 释放页表占用的各级目录页。
+    uvmfree(page_table, sz);
 }
 
 extern char etext[]; // 由链接脚本定义，指向内核代码段（text段）的结束地址

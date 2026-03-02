@@ -89,6 +89,7 @@ cd $SHELL_FOLDER/os
 mkdir -p user/bin
 #make -C user write
 make -C user time
+make -C user xec
 # 编译app加载模块
 make build_app
 ./build.out

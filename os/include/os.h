@@ -41,10 +41,14 @@ uint64_t __SYSCALL(size_t syscall_id, reg_t arg1, reg_t arg2, reg_t arg3);
 #define __NR_gettimeofday 169
 #define __NR_read 63
 #define __NR_clone 220
+#define __NR_execve 221
 uint64_t sys_write(size_t fd, const char* buf, size_t len);
 uint64_t sys_yield();
 uint64_t sys_get_time();
 int sys_fork();
+char* translated_byte_buffer(const char* data , size_t len);
+int sys_exec(const char* name);
+void exec(const char* name);
 
 // switch.S
 extern void __switch(TaskContext *current_task_cx_ptr, TaskContext* next_task_cx_ptr);
@@ -76,5 +80,6 @@ extern void timer_init();
 extern size_t strlen(const char *s);
 void* memset(void *dest, int ch, size_t count);
 void* memcpy(void* dest, const void* src, size_t n);
+int strcmp(const char *lhs, const char *rhs);
 
 #endif // __OS_H__

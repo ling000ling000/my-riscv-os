@@ -1,3 +1,4 @@
+#include "loader.h"
 #include "../include/os.h"
 
 // 记录当前正在运行的任务索引（ID）
@@ -368,6 +369,11 @@ int alloc_pid()
     return pid;
 }
 
+struct TaskControlBlock* current_proc()
+{
+    return &tasks[_current];
+}
+
 // 进程控制块（PCB）的分配与初始化
 struct TaskControlBlock* alloc_proc()
 {
@@ -431,4 +437,33 @@ int __sys_fork()
 
     _top++; // 更新进程计数（可能是全局变量，记录活跃进程数）
     return np->pid; // 父进程返回子进程的 PID
+}
+
+void exec(const char* name)
+{
+    size_t app_id = get_app_num_by_name(name);
+    assert(app_id != -1);
+    AppMetaData meta_data = get_app_data_by_name(name);
+    elf64_ehdr_t* ehdr = meta_data.start;
+    elf_check(ehdr);
+
+    struct TaskControlBlock* proc = current_proc();
+    PageTable old_page_table = proc->page_table;
+    uint64_t old_sz = proc->base_size;
+    proc_pagetable(proc);
+    load_segment(app_id, ehdr, proc); // 加载程序段
+    proc_ustack(proc);
+
+    pt_reg_t* cx_ptr = (pt_reg_t*)proc->trap_cx_ppn;
+    cx_ptr->sepc = (uint64_t)ehdr->e_entry;
+    cx_ptr->sp = proc->entry;
+    reg_t sstatus = r_sstatus();
+    sstatus &= (0U << 8); // 设置第8位SPP位为0，也就是U模式
+    w_sstatus(sstatus);
+    cx_ptr->sstatus = sstatus;
+    cx_ptr->kernel_satp = kernel_satp;
+    cx_ptr->kernel_sp = proc->kstack;
+    cx_ptr->trap_handler = (uint64_t)trap_handler;
+
+    proc_free_page_table(&old_page_table, old_sz);
 }

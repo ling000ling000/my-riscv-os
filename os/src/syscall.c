@@ -16,7 +16,7 @@ char* translated_byte_buffer(const char* data , size_t len)
     PageTableEntry* pte = find_pte(&pt, vpn);
     if (pte == NULL || !PageTableEntry_is_valid(pte))
     {
-        panic("translated_byte_buffer: invalid user address");
+        panic("[syscall]translated_byte_buffer: invalid user address");
     }
 
     // PTE[53:10] 是物理页号，转回物理地址
@@ -40,7 +40,7 @@ uint64_t __sys_write(size_t fd, const char* data, size_t len)
     else
     {
         // 报告错误并终止运行：当前实现仅支持写入标准输出，不支持其他文件描述符
-        panic("Unsupported fd in sys_write!");
+        panic("[syscall]Unsupported fd in sys_write!");
     }
     return 0;
 }
@@ -68,12 +68,20 @@ void __sys_exit(int code)
     // 你可以把当前任务标记为 Exited，然后 schedule()
     // TODO:task_exit_current(); // 你自己实现，或者直接改 tasks[_current].task_state = Exited;
     schedule();
-    panic("unreachable in __sys_exit");
+    panic("[syscall]unreachable in __sys_exit");
 }
 
 uint64_t __sys_get_time()
 {
     return get_time_us();
+}
+
+uint64_t __sys_exec(const char* name)
+{
+    char* app_name = translated_byte_buffer(name, strlen(name));
+    printk("[syscall]exec app name=%s\n", app_name);
+    exec(app_name);
+    return 0;
 }
 
 
@@ -115,9 +123,13 @@ uint64_t __SYSCALL(size_t syscall_id, reg_t arg1, reg_t arg2, reg_t arg3)
         {
             return __sys_fork();
         }
+    case __NR_execve:
+        {
+            return __sys_exec(arg2);
+        }
     default:
         {
-            panic("unsupport syscall id:%d\n", syscall_id);
+            panic("[syscall]unsupport syscall id:%d\n", syscall_id);
             break;
         }
     }

@@ -23,19 +23,20 @@
 int main()
 {
     // uint64_t current_time = 0;
-    int pid = sys_fork();
-    while (1)
-    {
-        // current_time = sys_get_time();
-        // printf("currnet time: %x\n", current_time);
-        // char data = getchar();
-        // printf("%c", data);
-        if (pid > 0)
-            printf("father\n");
-        else if (pid == 0)
-            printf("child\n");
-        else {}
-        sys_yield();
-    }
+    // int pid = sys_fork();
+    // while (1)
+    // {
+    //     // current_time = sys_get_time();
+    //     // printf("currnet time: %x\n", current_time);
+    //     // char data = getchar();
+    //     // printf("%c", data);
+    //     if (pid > 0)
+    //         printf("father\n");
+    //     else if (pid == 0)
+    //         printf("child\n");
+    //     else {}
+    //     sys_yield();
+    // }
+    sys_exec("xec");
     return 0;
 }

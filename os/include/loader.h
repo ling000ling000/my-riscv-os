@@ -62,5 +62,10 @@ size_t get_num_app();
 AppMetaData get_app_data(size_t app_id);
 void get_app_name();
 void load_app(size_t app_id);
+AppMetaData get_app_data_by_name(const char* path);
+size_t get_app_num_by_name(const char* app_name);
+void elf_check(elf64_ehdr_t* ehdr);
+void load_segment(size_t app_id, elf64_ehdr_t* ehdr, struct TaskControlBlock* proc);
+void proc_ustack(struct TaskControlBlock* proc);
 
 #endif //MY_RISCV_OS_LOADER_H

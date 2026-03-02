@@ -139,5 +139,7 @@ void PageTable_map(PageTable* pt,VirtAddr va, PhysAddr pa, uint64_t size ,uint8_
 VirtPageNum floor_virts(VirtAddr virt_addr);
 PageTableEntry* find_pte(PageTable* pt, VirtPageNum vpn);
 int uvmcopy(PageTable* old, PageTable* new, uint64_t sz);
+void freewalk(PhysPageNum ppn);
+void proc_free_page_table(PageTable* page_table, uint64_t sz);
 
 #endif //MY_RISCV_OS_ADDRESS_H

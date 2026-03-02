@@ -39,6 +39,37 @@ void get_app_name()
     printk("********************\n");
 }
 
+size_t get_app_num_by_name(const char* app_name)
+{
+    size_t app_id = -1;
+    int app_num = get_num_app();
+    for (size_t i = 0; i < app_num; i++ )
+    {
+        if (strcmp(app_name, app_names[i]) == 0)
+        {
+            app_id = i;
+            return app_id;
+        }
+    }
+    return app_id; // 错误的情况
+}
+
+AppMetaData get_app_data_by_name(const char* path)
+{
+    AppMetaData meta_data;
+    int app_num = get_num_app();
+    for (size_t i = 0; i < app_num; i ++ )
+    {
+        if (strcmp(path, app_names[i]) == 0)
+        {
+            meta_data = get_app_data(i);
+            printk("[loader]find app: %s\n", path);
+            return meta_data;
+        }
+    }
+    printk("[loader]not exit\n");
+}
+
 // 将ELF段权限标志（PF_R/PF_W/PF_X）转换为页表项（PTE）权限
 static uint8_t flags_to_mmap_prot(uint8_t flags)
 {
@@ -48,22 +79,22 @@ static uint8_t flags_to_mmap_prot(uint8_t flags)
             (flags & PF_X ? PTE_X : 0);  // 可执行 → PTE_X
 }
 
-// 加载指定ID的应用程序到内存，并创建对应的进程控制块
-void load_app(size_t app_id)
+void elf_check(elf64_ehdr_t* ehdr)
 {
-    uint64_t app_base_off = app_id * USER_APP_STRIDE;
-    AppMetaData meta_data = get_app_data(app_id + 1); // 获取应用程序的元数据（起始地址、大小）
-    elf64_ehdr_t* ehdr = (elf64_ehdr_t*)(meta_data.start); // 将应用起始地址转为ELF头部指针
-
     assert(*(uint32_t *)ehdr == ELFMAG); // 判断elf文件的魔数
     // 验证架构和位数
     if (ehdr->e_machine != EM_RISCV || ehdr->e_ident[EI_CLASS] != ELFCLASS64)
     {
         panic("only riscv64 elf file is supported");
     }
+}
+
+void load_segment(size_t app_id, elf64_ehdr_t* ehdr, struct TaskControlBlock* proc)
+{
+    uint64_t app_base_off = app_id * USER_APP_STRIDE;
+    AppMetaData meta_data = get_app_data(app_id + 1); // 获取应用程序的元数据（起始地址、大小）
 
     uint64_t entry = (uint64_t)ehdr->e_entry + app_base_off;
-    TaskControlBlock* proc = task_create_pt(app_id);
     proc->entry = entry;
     elf64_phdr_t* phdr;
     for (size_t i = 0; i < ehdr->e_phnum; i ++ )
@@ -108,7 +139,11 @@ void load_app(size_t app_id)
     // 1. 先将临时栈地址向上对齐到页大小
     // 2. 再偏移2个页大小，预留足够的栈空间（避免和程序段重叠）
     proc->ustack = 2 * PAGE_SIZE + PGROUNDUP(proc->ustack);
+    proc->base_size = proc->ustack; // 虚拟地址空间的最大值
+}
 
+void proc_ustack(struct TaskControlBlock* proc)
+{
     // 分配一个物理页作为用户栈的内存空间
     PhysPageNum ppn = kalloc();
     uint64_t paddr = phys_addr_from_phys_page_num(ppn).value;
@@ -121,6 +156,85 @@ void load_app(size_t app_id)
                   phys_addr_from_size_t(paddr), PAGE_SIZE, PTE_R | PTE_W | PTE_U);
     PageTable_map(&kernel_pagetable, virt_addr_from_size_t(proc->ustack - PAGE_SIZE),
                   phys_addr_from_size_t(paddr), PAGE_SIZE, PTE_R | PTE_W | PTE_U);
+}
 
-    proc->base_size = proc->ustack; // 虚拟地址空间的最大值
+// 加载指定ID的应用程序到内存，并创建对应的进程控制块
+void load_app(size_t app_id)
+{
+    uint64_t app_base_off = app_id * USER_APP_STRIDE;
+    AppMetaData meta_data = get_app_data(app_id + 1); // 获取应用程序的元数据（起始地址、大小）
+    elf64_ehdr_t* ehdr = (elf64_ehdr_t*)(meta_data.start); // 将应用起始地址转为ELF头部指针
+
+    elf_check(ehdr);
+    // assert(*(uint32_t *)ehdr == ELFMAG); // 判断elf文件的魔数
+    // // 验证架构和位数
+    // if (ehdr->e_machine != EM_RISCV || ehdr->e_ident[EI_CLASS] != ELFCLASS64)
+    // {
+    //     panic("only riscv64 elf file is supported");
+    // }
+
+    // uint64_t entry = (uint64_t)ehdr->e_entry + app_base_off;
+    TaskControlBlock* proc = task_create_pt(app_id);
+    load_segment(app_id, ehdr, proc);
+    proc->entry = ehdr->e_entry;
+    // proc->entry = entry;
+    // elf64_phdr_t* phdr;
+    // for (size_t i = 0; i < ehdr->e_phnum; i ++ )
+    // {
+    //     phdr = (elf64_phdr_t *)(ehdr->e_phoff + ehdr->e_phentsize * i + meta_data.start); // 计算第i个程序头地址
+    //     if (phdr->p_type == PT_LOAD)
+    //     {
+    //         uint64_t start_va = phdr->p_vaddr + app_base_off; // 映射内存段开始位置
+    //         proc->ustack = start_va + phdr->p_memsz; // 映射内存段结束位置
+    //         uint8_t map_perm = flags_to_mmap_prot(phdr->p_flags) | PTE_U; // 转换ELF程序段的权限标志为页表项权限
+    //         uint64_t map_size = PGROUNDUP(phdr->p_memsz); // 计算该段需要映射的内存大小，向上对齐到页大小
+    //
+    //         for (size_t j = 0; j < map_size; j += PAGE_SIZE)
+    //         {
+    //             PhysPageNum ppn = kalloc();
+    //             uint64_t paddr = phys_addr_from_phys_page_num(ppn).value;
+    //             // 仅拷贝文件中存在的数据，BSS 部分保持 kalloc 后的零值。
+    //             uint64_t copy_size = 0;
+    //             if (j < phdr->p_filesz)
+    //             {
+    //                 copy_size = phdr->p_filesz - j;
+    //                 if (copy_size > PAGE_SIZE) copy_size = PAGE_SIZE;
+    //                 memcpy((void *)paddr, (void *)(meta_data.start + phdr->p_offset + j), copy_size);
+    //             }
+    //             printk("proc->pagetable.value:%p\n", proc->page_table.root_ppn.value);
+    //             // 建立虚拟地址到物理地址的映射
+    //             PageTable_map(&proc->page_table,
+    //                        virt_addr_from_size_t(start_va + j),
+    //                       phys_addr_from_size_t(paddr),
+    //                      PAGE_SIZE,
+    //                           map_perm);
+    //             // 同时映射到内核页表（兼容模式：不切 satp 也可运行）。
+    //             PageTable_map(&kernel_pagetable,
+    //                        virt_addr_from_size_t(start_va + j),
+    //                       phys_addr_from_size_t(paddr),
+    //                      PAGE_SIZE,
+    //                           map_perm);
+    //         }
+    //     }
+    // }
+    // // 调整用户栈的最终位置：
+    // // 1. 先将临时栈地址向上对齐到页大小
+    // // 2. 再偏移2个页大小，预留足够的栈空间（避免和程序段重叠）
+    // proc->ustack = 2 * PAGE_SIZE + PGROUNDUP(proc->ustack);
+
+    proc_ustack(proc);
+    // 分配一个物理页作为用户栈的内存空间
+    // PhysPageNum ppn = kalloc();
+    // uint64_t paddr = phys_addr_from_phys_page_num(ppn).value;
+    //
+    // // 映射用户栈的虚拟地址到物理地址：
+    // // 虚拟地址：proc->ustack - PAGE_SIZE（栈从高地址向低地址增长）
+    // // 权限：PTE_R(可读) | PTE_W(可写) | PTE_U(用户态)（栈不需要执行权限）
+    // // 大小：1个页（PAGE_SIZE）
+    // PageTable_map(&proc->page_table, virt_addr_from_size_t(proc->ustack - PAGE_SIZE),
+    //               phys_addr_from_size_t(paddr), PAGE_SIZE, PTE_R | PTE_W | PTE_U);
+    // PageTable_map(&kernel_pagetable, virt_addr_from_size_t(proc->ustack - PAGE_SIZE),
+    //               phys_addr_from_size_t(paddr), PAGE_SIZE, PTE_R | PTE_W | PTE_U);
+    //
+    // proc->base_size = proc->ustack; // 虚拟地址空间的最大值
 }

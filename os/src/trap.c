@@ -67,7 +67,9 @@ void trap_handler()
         case 8:
             {
                 cx->sepc += 4;
-                cx->a0 = __SYSCALL(cx->a7, cx->a0, cx->a1, cx->a2);
+                uint64_t result = __SYSCALL(cx->a7, cx->a0, cx->a1, cx->a2);
+                cx = get_current_trap_cx();
+                cx->a0 = result;
                 break;
             }
         default:

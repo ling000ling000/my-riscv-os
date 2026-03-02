@@ -16,7 +16,13 @@ time: start.S time.c $(LIB)/*.c
 	${CC} ${CFLAGS} $(INCLUDE) -T user.ld -Wl,-Map=time.map -o bin/time $^
 	cp bin/time bin/time.bin
 
+xec: start.S xec.c $(LIB)/*.c
+	${CC} ${CFLAGS} $(INCLUDE) -T user.ld -Wl,-Map=xec.map -o bin/xec $^
+	cp bin/xec bin/xec.bin
+
 objdump_time:
 	${OBJDUMP} -d bin/time > time.txt
 objdump_write:
 	${OBJDUMP} -d bin/write > write.txt
+objdump_xec:
+	${OBJDUMP} -d bin/xec > xec.txt
