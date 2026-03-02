@@ -78,7 +78,9 @@ uint64_t __sys_get_time()
 
 uint64_t __sys_exec(const char* name)
 {
-    char* app_name = translated_byte_buffer(name, strlen(name));
+    // Do not dereference user pointer directly in S-mode (e.g. strlen(name)),
+    // otherwise it may fault on U pages when SUM is not enabled.
+    char* app_name = translated_byte_buffer(name, 0);
     printk("[syscall]exec app name=%s\n", app_name);
     exec(app_name);
     return 0;

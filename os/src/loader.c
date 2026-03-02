@@ -56,18 +56,20 @@ size_t get_app_num_by_name(const char* app_name)
 
 AppMetaData get_app_data_by_name(const char* path)
 {
-    AppMetaData meta_data;
+    AppMetaData meta_data = {0};
     int app_num = get_num_app();
     for (size_t i = 0; i < app_num; i ++ )
     {
         if (strcmp(path, app_names[i]) == 0)
         {
-            meta_data = get_app_data(i);
+            // _num_app[0] stores app count, app payload starts from index 1.
+            meta_data = get_app_data(i + 1);
             printk("[loader]find app: %s\n", path);
             return meta_data;
         }
     }
-    printk("[loader]not exit\n");
+    panic("[loader]app not found: %s\n", path);
+    return meta_data;
 }
 
 // 将ELF段权限标志（PF_R/PF_W/PF_X）转换为页表项（PTE）权限
@@ -127,11 +129,17 @@ void load_segment(size_t app_id, elf64_ehdr_t* ehdr, struct TaskControlBlock* pr
                          PAGE_SIZE,
                               map_perm);
                 // 同时映射到内核页表（兼容模式：不切 satp 也可运行）。
-                PageTable_map(&kernel_pagetable,
-                           virt_addr_from_size_t(start_va + j),
-                          phys_addr_from_size_t(paddr),
-                         PAGE_SIZE,
-                              map_perm);
+                // exec() 重载已有应用时，这个 VA 可能已在内核页表中存在，避免重复映射触发断言。
+                VirtPageNum kva_vpn = floor_virts(virt_addr_from_size_t(start_va + j));
+                PageTableEntry *kva_pte = find_pte(&kernel_pagetable, kva_vpn);
+                if (!(kva_pte && PageTableEntry_is_valid(kva_pte)))
+                {
+                    PageTable_map(&kernel_pagetable,
+                               virt_addr_from_size_t(start_va + j),
+                              phys_addr_from_size_t(paddr),
+                             PAGE_SIZE,
+                                  map_perm);
+                }
             }
         }
     }
@@ -154,8 +162,13 @@ void proc_ustack(struct TaskControlBlock* proc)
     // 大小：1个页（PAGE_SIZE）
     PageTable_map(&proc->page_table, virt_addr_from_size_t(proc->ustack - PAGE_SIZE),
                   phys_addr_from_size_t(paddr), PAGE_SIZE, PTE_R | PTE_W | PTE_U);
-    PageTable_map(&kernel_pagetable, virt_addr_from_size_t(proc->ustack - PAGE_SIZE),
-                  phys_addr_from_size_t(paddr), PAGE_SIZE, PTE_R | PTE_W | PTE_U);
+    VirtPageNum kva_vpn = floor_virts(virt_addr_from_size_t(proc->ustack - PAGE_SIZE));
+    PageTableEntry *kva_pte = find_pte(&kernel_pagetable, kva_vpn);
+    if (!(kva_pte && PageTableEntry_is_valid(kva_pte)))
+    {
+        PageTable_map(&kernel_pagetable, virt_addr_from_size_t(proc->ustack - PAGE_SIZE),
+                      phys_addr_from_size_t(paddr), PAGE_SIZE, PTE_R | PTE_W | PTE_U);
+    }
 }
 
 // 加载指定ID的应用程序到内存，并创建对应的进程控制块
@@ -176,8 +189,6 @@ void load_app(size_t app_id)
     // uint64_t entry = (uint64_t)ehdr->e_entry + app_base_off;
     TaskControlBlock* proc = task_create_pt(app_id);
     load_segment(app_id, ehdr, proc);
-    proc->entry = ehdr->e_entry;
-    // proc->entry = entry;
     // elf64_phdr_t* phdr;
     // for (size_t i = 0; i < ehdr->e_phnum; i ++ )
     // {
