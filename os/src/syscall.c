@@ -84,8 +84,7 @@ uint64_t __sys_exec(const char* name)
     // otherwise it may fault on U pages when SUM is not enabled.
     char* app_name = translated_byte_buffer(name, 0);
     printk("[syscall]exec app name=%s\n", app_name);
-    ex
-    ec(app_name);
+    exec(app_name);
     return 0;
 }
 

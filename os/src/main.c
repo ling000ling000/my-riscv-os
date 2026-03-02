@@ -12,11 +12,13 @@ void os_main()
     kvminit();
     proc_init();
 
-    for (size_t i = 0; i < app_num; i++)
-    {
-        load_app(i);
-        app_init(i);
-    }
+    // for (size_t i = 0; i < app_num; i++)
+    // {
+    //     load_app(i);
+    //     app_init(i);
+    // }
+    load_app(0);
+    app_init(0);
     asm volatile("fence.i");
 
     kvminithart(); // 映射内核

@@ -470,13 +470,9 @@ void uvmunmap(PageTable* pt, VirtPageNum vpn, uint64_t npages, int do_free)
     uint64_t a; // 虚拟页号
     for (a = vpn.value; a < vpn.value + npages; a ++)
     {
-        printk("vpn.value:%d\n", a);
-
         pte = find_pte(pt, virt_page_num_from_size_t(a));
         if (pte != 0)
         {
-            printk("pte->bits:%x\n", (uint64_t)pte->bits);
-
             // 3. 如果需要释放物理内存
             if(do_free)
             {
@@ -484,8 +480,6 @@ void uvmunmap(PageTable* pt, VirtPageNum vpn, uint64_t npages, int do_free)
                 uint64_t phyaddr = PTE2PA(pte->bits);
                 // 将物理地址转换为物理页号
                 PhysPageNum ppn = floor_phys(phys_addr_from_size_t(phyaddr));
-
-                printk("ppn.value:%d\n", ppn.value);
 
                 // 【关键操作】释放物理内存页给分配器
                 kfree(ppn);
@@ -498,20 +492,9 @@ void uvmunmap(PageTable* pt, VirtPageNum vpn, uint64_t npages, int do_free)
 // 先释放所有用户数据占用的物理内存，然后释放页表索引结构本身占用的物理内存
 void uvmfree(PageTable* pt, uint64_t sz)
 {
-    // --- 步骤 1: 释放用户数据页 ---
-    // 如果进程占有内存（sz > 0），则需要进行清理
-    if(sz > 0)
-    {
-        // 调用 uvmunmap 清理从虚拟地址 0 开始的 sz/PAGE_SIZE 个页面
-        // virt_addr_from_size_t(0): 起始虚拟地址为 0
-        // sz/PAGE_SIZE: 计算页面总数
-        // 参数 '1' (do_free): 表示不仅要清除映射，还要调用 kfree 释放物理内存
-        uvmunmap(pt, floor_virts(virt_addr_from_size_t(0)), sz/PAGE_SIZE, 1);
-    }
-
-    // --- 步骤 2: 释放页表结构 ---
-    // 当所有数据页（叶子节点）都被清理干净后，释放页表本身的树形结构
-    // freewalk 会递归释放所有页表目录页（非叶子节点）
+    (void)sz;
+    // 直接递归释放页表树中剩余的所有叶子页和页表页，
+    // 避免按 [0, sz) 线性扫描导致高地址稀疏映射时开销过大。
     freewalk(pt->root_ppn);
 }
 
@@ -530,10 +513,12 @@ void freewalk(PhysPageNum ppn)
         }
         else if (pte->bits & PTE_V) // 有效的叶子节点 (数据页)
         {
-            panic("freewalk: leaf"); // 意味着 freewalk 被调用时，页表中不应该还有映射的数据页
+            uint64_t phyaddr = PTE2PA(pte->bits);
+            PhysPageNum leaf_ppn = floor_phys(phys_addr_from_size_t(phyaddr));
+            kfree(leaf_ppn);
+            *pte = PageTableEntry_empty();
         }
     }
-    printk("free ppn:%d\n",ppn.value);
     kfree(ppn);
 }
 
