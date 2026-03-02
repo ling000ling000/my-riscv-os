@@ -81,5 +81,6 @@ extern size_t strlen(const char *s);
 void* memset(void *dest, int ch, size_t count);
 void* memcpy(void* dest, const void* src, size_t n);
 int strcmp(const char *lhs, const char *rhs);
+void strcat(char *dest, const char *src, int n);
 
 #endif // __OS_H__

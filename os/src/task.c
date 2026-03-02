@@ -429,11 +429,11 @@ int __sys_fork()
     // ra (返回地址): 设置为 trap_return。
     // 当子进程第一次被调度器选中运行时，__switch 会跳转到 trap_return，
     // 从而恢复 Trap 上下文，最终通过 sret 返回用户态。
-    np->task_context.ra = trap_return;
-
+    // np->task_context.ra = trap_return;
     // sp (栈指针): 设置为子进程的内核栈顶。
     // 这样子进程就有了独立的内核栈空间。
-    np->task_context.sp = np->kstack;
+    // np->task_context.sp = np->kstack;
+    np->task_context = tcx_init((reg_t)np->kstack);
 
     _top++; // 更新进程计数（可能是全局变量，记录活跃进程数）
     return np->pid; // 父进程返回子进程的 PID
@@ -441,33 +441,38 @@ int __sys_fork()
 
 void exec(const char* name)
 {
+    // 解析elf文件
     size_t app_id = get_app_num_by_name(name);
     assert(app_id != -1);
     AppMetaData meta_data = get_app_data_by_name(name);
-    elf64_ehdr_t* ehdr = (elf64_ehdr_t*)meta_data.start;
+    elf64_ehdr_t* ehdr = (elf64_ehdr_t*)meta_data.start;  // 将内存起始地址强制转换为 ELF 头结构体指针
     elf_check(ehdr);
 
+    // 准备进程环境
     struct TaskControlBlock* proc = current_proc();
-    PageTable old_page_table = proc->page_table;
+    PageTable old_page_table = proc->page_table; // 必须先保存旧的页表和大小，因为一旦创建新页表，指针就被覆盖了
     uint64_t old_sz = proc->base_size;
-    proc_pagetable(proc);
-    load_segment(app_id, ehdr, proc); // 加载程序段
-    proc_ustack(proc);
+    proc_pagetable(proc); // 创建全新的、空的用户页表
+    load_segment(app_id, ehdr, proc); // 解析 ELF，将程序段加载到新页表中
+    proc_ustack(proc); // 分配并映射用户栈
 
-    pt_reg_t* cx_ptr = (pt_reg_t*)proc->trap_cx_ppn;
-    cx_ptr->sepc = proc->entry;
-    cx_ptr->sp = proc->ustack;
-    reg_t sstatus = r_sstatus();
-    // Build user-return sstatus in trap context; do not overwrite live CSR.
-    sstatus &= ~(1UL << 8); // SPP=0, sret returns to U mode
-    sstatus |=  (1UL << 5); // SPIE=1, enable interrupts after sret
-    cx_ptr->sstatus = sstatus;
-    cx_ptr->kernel_satp = kernel_satp;
-    cx_ptr->kernel_sp = proc->kstack;
-    cx_ptr->trap_handler = (uint64_t)trap_handler;
+    // 构造 Trap 上下文 (构建“伪造”的现场)
+    pt_reg_t* cx_ptr = (pt_reg_t*)proc->trap_cx_ppn; // 获取 Trap 上下文物理页的虚拟地址
+    cx_ptr->sepc = proc->entry; // 设置新的入口点, ELF 头中指定的 entry point
+    cx_ptr->sp = proc->ustack; // 设置用户栈指针
+    // trap页没有重新分配物理页，只是改变映射，因此下面的要注释掉
+    // reg_t sstatus = r_sstatus();
+    // // Build user-return sstatus in trap context; do not overwrite live CSR.
+    // sstatus &= ~(1UL << 8); // SPP=0, sret returns to U mode
+    // sstatus |=  (1UL << 5); // SPIE=1, enable interrupts after sret
+    // cx_ptr->sstatus = sstatus;
+    // // 设置内核相关信息，用于后续陷入内核时使用
+    // cx_ptr->kernel_satp = kernel_satp;
+    // cx_ptr->kernel_sp = proc->kstack;
+    // cx_ptr->trap_handler = (uint64_t)trap_handler;
 
     asm volatile("fence.i");
-    sfence_vma();
+    sfence_vma(); // TLB (快表) 刷新，确保使用新的地址映射
 
-    proc_free_page_table(&old_page_table, old_sz);
+    proc_free_page_table(&old_page_table, old_sz); // 释放旧程序的内存
 }

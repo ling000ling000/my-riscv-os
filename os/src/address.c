@@ -552,7 +552,7 @@ void proc_free_page_table(PageTable* page_table, uint64_t sz)
     // 参数 '1' (do_free) 表示解除映射，并且释放物理内存。
     // 原因：每个进程都有自己独立的 Trap 上下文，进程死了，这块内存就没用了，
     // 必须回收给系统。
-    uvmunmap(page_table, floor_virts(virt_addr_from_size_t(TRAPFRAME)), 1, 1);
+    uvmunmap(page_table, floor_virts(virt_addr_from_size_t(TRAPFRAME)), 1, 0);
 
     // --- 步骤 3: 释放剩余用户内存及页表结构 ---
     // 这一步会清理所有用户数据页（代码、数据、堆、栈），

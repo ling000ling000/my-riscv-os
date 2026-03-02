@@ -56,6 +56,8 @@ void __sys_read(size_t fd, char* data, size_t len)
             c = sbi_console_getchar();
             if (c != -1)
                 break;
+            schedule();
+            continue;
         }
         char* str = translated_byte_buffer(data, len);
         str[0] = c;
@@ -82,7 +84,8 @@ uint64_t __sys_exec(const char* name)
     // otherwise it may fault on U pages when SUM is not enabled.
     char* app_name = translated_byte_buffer(name, 0);
     printk("[syscall]exec app name=%s\n", app_name);
-    exec(app_name);
+    ex
+    ec(app_name);
     return 0;
 }
 
