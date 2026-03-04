@@ -6,7 +6,7 @@ static int _current = 0;
 // 记录当前已创建的任务总数，指向栈顶
 static int _top = 0;
 // 分配pid
-int next_pid = 1;
+int next_pid = 0;
 
 // 定义内核栈数组，二维数组，每个任务拥有独立的内核栈空间
 uint8_t KernelStack[MAX_TASKS][KERNEL_STACK_SIZE];
@@ -312,8 +312,14 @@ void schedule()
     // 2) 容错：若某个“非当前任务”误标成 Running，也允许切过去恢复轮转
     for (int i = 1; i <= _top; i++)
     {
-        int idx = (current + i) % _top;
+        int idx = (current + i) % _top; // 计算模 _top 的索引，实现环形遍历
         TaskState st = tasks[idx].task_state;
+        // 筛选条件：
+        // 条件 A: 状态为 Ready (这是正常情况)
+        // 条件 B: 状态为 Running 且不是当前进程 (容错逻辑)
+        // 解释：正常情况下，同一时刻只能有一个 Running 状态的进程。
+        // 但如果因为某些逻辑错误导致多个进程被标记为 Running，
+        // 调度器允许切换到那个“错误的 Running”进程，以保证系统流转不卡死。
         if (st == Ready || (idx != current && st == Running))
         {
             next = idx;
@@ -321,6 +327,7 @@ void schedule()
         }
     }
 
+    // 如果没找到合适的进程，或者找到的就是当前进程，则直接返回，不切换
     if (next < 0 || next == current)
         return;
 
@@ -475,4 +482,86 @@ void exec(const char* name)
     sfence_vma(); // TLB (快表) 刷新，确保使用新的地址映射
 
     proc_free_page_table(&old_page_table, old_sz); // 释放旧程序的内存
+}
+
+// 将当前进程的所有子进程挂在初始进程initproc下面
+void children_proc_clean(struct TaskControlBlock* p)
+{
+    struct TaskControlBlock* child;
+    for (child = tasks; child < &tasks[MAX_TASKS]; child ++)
+    {
+        if (child->parent == p)
+        {
+            child->parent = &tasks[0];
+        }
+    }
+}
+
+// 进程退出并触发调度
+void exit_current_and_run_next(uint64_t exit_code)
+{
+    struct TaskControlBlock* p = current_proc();
+    if (p->pid == 0)
+    {
+        panic("init exiting");
+    }
+
+    p->exit_code = exit_code;
+    p->task_state = Exited;
+    children_proc_clean(p); // 将当前进程的所有子进程“过继”给 initproc
+
+    _top --;
+    schedule();
+    panic("[task]proc exited!");
+}
+
+// 进程资源回收
+void free_proc(struct TaskControlBlock* p)
+{
+    proc_free_page_table(&p->page_table, p->base_size);
+
+    p->page_table.root_ppn.value = 0;
+    p->base_size = 0;
+    p->parent = 0;
+    p->ustack = 0;
+    p->entry = 0;
+    p->task_state = UnInit;
+    p->exit_code = 0;
+}
+
+// 父进程等待与回收
+int wait(uint64_t status_ptr)
+{
+    struct TaskControlBlock* children;
+    struct TaskControlBlock* p = current_proc(); // 当前进程，也就是父进程
+
+    int pid, have_child;
+    for (;;)
+    {
+        have_child = 0;
+        for (children = tasks; children < &tasks[MAX_TASKS]; children ++)
+        {
+            if (children->parent == p) // 找到当前进程的子进程
+            {
+                have_child = 1;
+                if (children->task_state == Exited)
+                {
+                    pid = children->pid;
+                    if (status_ptr != 0)
+                    {
+                        int *status_kptr = (int *)translated_byte_buffer((const char *)status_ptr, sizeof(int));
+                        *status_kptr = (int)children->exit_code;
+                    }
+                    free_proc(children); // 回收子进程
+                    printk("[task]child pid: %d\n", pid);
+                    return pid;
+                }
+            }
+        }
+        if (!have_child)
+        {
+            return -1;
+        }
+        schedule();
+    }
 }

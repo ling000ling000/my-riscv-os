@@ -3,7 +3,7 @@
 #include "../include/assert.h"
 
 void __sys_yield(void);
-void __sys_exit(int code);   // 如果你也会调用它
+void __sys_exit(uint64_t code);   // 如果你也会调用它
 
 char* translated_byte_buffer(const char* data , size_t len)
 {
@@ -64,13 +64,9 @@ void __sys_read(size_t fd, char* data, size_t len)
     }
 }
 
-void __sys_exit(int code)
+void __sys_exit(uint64_t exit_code)
 {
-    printk("[kernel] task exit code=%d\n", code);
-    // 你可以把当前任务标记为 Exited，然后 schedule()
-    // TODO:task_exit_current(); // 你自己实现，或者直接改 tasks[_current].task_state = Exited;
-    schedule();
-    panic("[syscall]unreachable in __sys_exit");
+    exit_current_and_run_next(exit_code);
 }
 
 uint64_t __sys_get_time()
@@ -86,6 +82,11 @@ uint64_t __sys_exec(const char* name)
     printk("[syscall]exec app name=%s\n", app_name);
     exec(app_name);
     return 0;
+}
+
+int __sys_wait(uint64_t status_ptr)
+{
+    return wait(status_ptr);
 }
 
 
@@ -130,6 +131,15 @@ uint64_t __SYSCALL(size_t syscall_id, reg_t arg1, reg_t arg2, reg_t arg3)
     case __NR_execve:
         {
             return __sys_exec(arg2);
+        }
+    case __NR_exit:
+        {
+            __sys_exit(arg1);
+            break;
+        }
+    case __NR_waitid:
+        {
+            return __sys_wait(arg1);
         }
     default:
         {

@@ -57,6 +57,16 @@ int sys_exec(const char* name)
     return syscall(__NR_execve, 0, (reg_t)name, 0);
 }
 
+int sys_exit(uint64_t exit_code)
+{
+    return syscall(__NR_exit, (reg_t)exit_code, 0, 0);
+}
+
+int sys_waitpid(int *status)
+{
+    return syscall(__NR_waitid, (reg_t)status, 0, 0);
+}
+
 // 获取一个字符
 char getchar()
 {

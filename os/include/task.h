@@ -31,6 +31,7 @@ typedef struct TaskControlBlock
     uint64_t ustack; // 应用的用户栈的虚拟地址
     uint64_t entry; // 应用程序入口的地址
     PageTable page_table; // 应用页表所在的物理页
+    uint64_t exit_code; // 进程退出码
 } TaskControlBlock;
 
 int alloc_pid();

@@ -31,6 +31,12 @@ int main()
                     {
                         sys_exec(line);
                     }
+                    else if (pid > 0)
+                    {
+                        int status = 0;
+                        int child = sys_waitpid(&status);
+                        printf("[shell]child pid=%d exited with status %d\n", child, status);
+                    }
                 }
                 len = 0;
                 line[0] = '\0';

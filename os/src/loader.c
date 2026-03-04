@@ -81,6 +81,23 @@ static uint8_t flags_to_mmap_prot(uint8_t flags)
             (flags & PF_X ? PTE_X : 0);  // 可执行 → PTE_X
 }
 
+// 兼容模式下用户程序实际运行在 kernel_satp 上，因此需要把用户页同步映射到内核页表。
+// 若该 VA 已有旧映射（例如上一个同名程序退出后留下的别名），必须先清掉再重建。
+static void map_kernel_compat(uint64_t va, uint64_t pa, uint8_t perm)
+{
+    VirtPageNum kva_vpn = floor_virts(virt_addr_from_size_t(va));
+    PageTableEntry *kva_pte = find_pte(&kernel_pagetable, kva_vpn);
+    if (kva_pte && PageTableEntry_is_valid(kva_pte))
+    {
+        *kva_pte = PageTableEntry_empty();
+    }
+    PageTable_map(&kernel_pagetable,
+                  virt_addr_from_size_t(va),
+                  phys_addr_from_size_t(pa),
+                  PAGE_SIZE,
+                  perm);
+}
+
 void elf_check(elf64_ehdr_t* ehdr)
 {
     assert(*(uint32_t *)ehdr == ELFMAG); // 判断elf文件的魔数
@@ -130,16 +147,7 @@ void load_segment(size_t app_id, elf64_ehdr_t* ehdr, struct TaskControlBlock* pr
                               map_perm);
                 // 同时映射到内核页表（兼容模式：不切 satp 也可运行）。
                 // exec() 重载已有应用时，这个 VA 可能已在内核页表中存在，避免重复映射触发断言。
-                VirtPageNum kva_vpn = floor_virts(virt_addr_from_size_t(start_va + j));
-                PageTableEntry *kva_pte = find_pte(&kernel_pagetable, kva_vpn);
-                if (!(kva_pte && PageTableEntry_is_valid(kva_pte)))
-                {
-                    PageTable_map(&kernel_pagetable,
-                               virt_addr_from_size_t(start_va + j),
-                              phys_addr_from_size_t(paddr),
-                             PAGE_SIZE,
-                                  map_perm);
-                }
+                map_kernel_compat(start_va + j, paddr, map_perm);
             }
         }
     }
@@ -162,13 +170,7 @@ void proc_ustack(struct TaskControlBlock* proc)
     // 大小：1个页（PAGE_SIZE）
     PageTable_map(&proc->page_table, virt_addr_from_size_t(proc->ustack - PAGE_SIZE),
                   phys_addr_from_size_t(paddr), PAGE_SIZE, PTE_R | PTE_W | PTE_U);
-    VirtPageNum kva_vpn = floor_virts(virt_addr_from_size_t(proc->ustack - PAGE_SIZE));
-    PageTableEntry *kva_pte = find_pte(&kernel_pagetable, kva_vpn);
-    if (!(kva_pte && PageTableEntry_is_valid(kva_pte)))
-    {
-        PageTable_map(&kernel_pagetable, virt_addr_from_size_t(proc->ustack - PAGE_SIZE),
-                      phys_addr_from_size_t(paddr), PAGE_SIZE, PTE_R | PTE_W | PTE_U);
-    }
+    map_kernel_compat(proc->ustack - PAGE_SIZE, paddr, PTE_R | PTE_W | PTE_U);
 }
 
 // 加载指定ID的应用程序到内存，并创建对应的进程控制块

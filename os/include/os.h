@@ -42,13 +42,16 @@ uint64_t __SYSCALL(size_t syscall_id, reg_t arg1, reg_t arg2, reg_t arg3);
 #define __NR_read 63
 #define __NR_clone 220
 #define __NR_execve 221
+#define __NR_exit 93
+#define __NR_waitid 95
 uint64_t sys_write(size_t fd, const char* buf, size_t len);
 uint64_t sys_yield();
 uint64_t sys_get_time();
 int sys_fork();
+int sys_exit(uint64_t exit_code);
 char* translated_byte_buffer(const char* data , size_t len);
 int sys_exec(const char* name);
-void exec(const char* name);
+int sys_waitpid(int *status);
 
 // switch.S
 extern void __switch(TaskContext *current_task_cx_ptr, TaskContext* next_task_cx_ptr);
@@ -65,6 +68,9 @@ uint64_t current_user_token();
 void app_init(size_t app_id);
 int __sys_fork();
 void proc_init();
+void exit_current_and_run_next(uint64_t exit_code);
+void exec(const char* name);
+int wait(uint64_t status_ptr);
 
 // app.c
 extern void task_init();
